@@ -4,8 +4,7 @@ import argparse
 import re
 import string
 import sys
-from tokenize import tokenize, untokenize, NUMBER, STRING, NAME, OP
-from io import BytesIO
+
 
 parser = argparse.ArgumentParser("pycalc", description='Pure-python command-line calculator',
                                  usage='%(prog)s EXPRESSION [-h] [-v] [-m [MODULE [MODULE ...]]]')
