@@ -6,26 +6,34 @@ import string
 import sys
 
 
+def check_parentheses(t_expr):
+    parentheses = 0
+    for (_, v) in t_expr:
+        if v == '(': parentheses += 1
+        if v == ')': parentheses -= 1
+        if parentheses < 0: raise ValueError("Wrong parentheses")
+    else:
+        if parentheses > 0: raise ValueError("Wrong parentheses")
+
+
 parser = argparse.ArgumentParser("pycalc", description='Pure-python command-line calculator',
                                  usage='%(prog)s EXPRESSION [-h] [-v] [-m [MODULE [MODULE ...]]]')
 parser.add_argument('-m', '--use-modules', type=str, help='additional modules to use', nargs='+', metavar='MODULE')
 parser.add_argument('EXPRESSION', help='expression string to evaluate')
 parser.add_argument('-v', '--verbose', action='store_true', help='print verbose information')
 args = parser.parse_args()
-vrbs = args.verbose
+verbose = args.verbose
 expr = str(args.EXPRESSION)
-expr = re.sub('[^{}]'.format(string.ascii_letters + string.digits + '+\-*/^%><=.!_()'), '', expr)
+expr = re.sub('[^{}]'.format(string.ascii_letters + string.digits + '+\-*/^%><=,.!_()'), '', expr)
 
-if vrbs:
-    print('======INPUT======')
+if verbose:
     print('ARGS:\t', vars(args))
     print('EXPR:\t', expr)
-    print('====IMPORTING====')
 
 for module in args.use_modules:
     try:
         locals()[module] = __import__(module)
-        if vrbs:
+        if verbose:
             print('IMPORT:\t', module)
     except ModuleNotFoundError:
         print("ERROR:\t Module not found:", module, file=sys.stderr)
@@ -33,35 +41,48 @@ for module in args.use_modules:
 
 
 tokens = (
-('re_FLOAT', r'\d*\.\d+'),
-('re_INTEGER', r'\d+'),
-('re_LPARENT', r'\('),
-('re_RPARENT', r'\)'),
-('re_PLUS', r'\+'),
-('re_MINUS', r'-'),
-('re_TIMES', r'\*'),
-('re_DIVIDE', r'/'),
-('re_FUNC', r'[a-zA-Z_][a-zA-Z0-9_.]*'),
-('re_POWER', r'\^'),
-('re_FDIVIDE', r'//'),
-('re_MODULO', r'%'),
-('re_EQUALS', r'=='),
-('re_LE', r'<='),
-('re_LT', r'<'),
-('re_GE', r'>='),
-('re_GT', r'>'),
-('re_NE', r'!='),
+    ('FLOAT', r'\d*\.\d+'),
+    ('INTEGER', r'\d+'),
+    ('LPARENT', r'\('),
+    ('RPARENT', r'\)'),
+    ('PLUS', r'\+'),
+    ('MINUS', r'-'),
+    ('TIMES', r'\*'),
+    ('DIVIDE', r'/'),
+    ('FUNC', r'[a-zA-Z_][a-zA-Z0-9_.]*'),
+    ('COMMA', r'\,'),
+    ('POWER', r'\^'),
+    ('FDIVIDE', r'//'),
+    ('MODULO', r'%'),
+    ('EQUALS', r'=='),
+    ('LE', r'<='),
+    ('LT', r'<'),
+    ('GE', r'>='),
+    ('GT', r'>'),
+    ('NE', r'!='),
 )
+compiled_tokens = [(t, re.compile(t_re)) for (t, t_re) in tokens]
 
+token_expr = []
 
+while expr:
+    for (t, t_cre) in compiled_tokens:
+        t_match = t_cre.match(expr)
+        if t_match:
+            token_expr.append((t, t_match.group()))
+            expr = expr[t_match.end():]
+            break
+    else:
+        raise ValueError("EXPRESSION Tokenization Error")
 
+if verbose:
+    print(*token_expr, sep='\n')
 
+check_parentheses(token_expr)
 
+result = 0
 
-result = 1
-
-if vrbs:
-    print('=====RESULTS=====')
+if verbose:
     print('RESULT:\t', result)
 else:
     print(result)
