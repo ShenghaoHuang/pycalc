@@ -1,0 +1,27 @@
++
+-
+*
+/
+//
+%
+^
+
+<=
+<
+=
+>
+>=
+
+abs
+pow
+round
+min
+max
+__builtins__
+
+
+Numeric Literals:
+    int
+    float
+    imaginary
+
