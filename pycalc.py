@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
+# https://blog.kallisti.net.nz/2008/02/extension-to-the-shunting-yard-algorithm-to-allow-variable-numbers-of-arguments-to-functions/
+
 import argparse
 import re
 import string
 import sys
-
+import operator
 
 def check_parentheses(t_expr):
     parentheses = 0
@@ -32,7 +34,7 @@ if verbose:
 
 for module in args.use_modules:
     try:
-        locals()[module] = __import__(module)
+        globals()[module] = __import__(module)
         if verbose:
             print('IMPORT:\t', module)
     except ModuleNotFoundError:
@@ -62,7 +64,23 @@ tokens = (
     ('NE', r'!='),
 )
 compiled_tokens = [(t, re.compile(t_re)) for (t, t_re) in tokens]
-
+runtokens = (
+    ('FLOAT', float),
+    ('INTEGER', int),
+    ('PLUS', operator.add),
+    ('MINUS', operator.sub),
+    ('TIMES', operator.mul),
+    ('DIVIDE', operator.truediv),
+    ('POWER', operator.pow),
+    ('FDIVIDE', operator.floordiv),
+    ('MODULO', operator.mod),
+    ('EQUALS', operator.eq),
+    ('LE', operator.le),
+    ('LT', operator.lt),
+    ('GE', operator.ge),
+    ('GT', operator.gt),
+    ('NE', operator.ne),
+)
 token_expr = []
 
 while expr:
