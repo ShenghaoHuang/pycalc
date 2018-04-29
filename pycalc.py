@@ -27,8 +27,7 @@ for module in args.use_modules:
         if verbose:
             print('IMPORT:\t', module)
     except ModuleNotFoundError:
-        print("ERROR:\t Module not found:", module, file=sys.stderr)
-        sys.exit(1)
+        perror("ERROR:\t Module not found:" + module)
 
 token_expr = []
 while expr:
@@ -39,10 +38,9 @@ while expr:
             expr = expr[t_match.end():]
             break
     else:
-        raise ValueError("EXPRESSION Tokenization Error")
+        perror("ERROR: EXPRESSION Tokenization Error")
+token_expr = [(i, t, v) for i, (t, v) in enumerate(token_expr)]
 
-for i, (t, v) in enumerate(token_expr):
-    token_expr[i] = (i, t, v)
 
 parent_level = 0
 func_levels = []
@@ -52,30 +50,35 @@ for (i, t, v) in token_expr:
     if t == 'FUNC':
         parent_level += 1
         func_levels.append(parent_level)
-    if t == 'COMMA' and parent_level != func_levels[-1]:
-        raise ValueError("Comma error")
+    if t == 'COMMA' and ((func_levels and parent_level != func_levels[-1]) or (not func_levels)):
+        perror("ERROR: Comma error")
     if t == 'RPARENT':
         if func_levels and func_levels[-1] == parent_level:
             t = 'FRPARENT'
             func_levels.pop()
         parent_level -= 1
         if parent_level < 0:
-            raise ValueError("Wrong parentheses")
+            perror("ERROR: Parentheses error")
     token_expr[i] = (i, t, v, parent_level, func_levels[:])
 else:
-    if parent_level > 0: raise ValueError("Wrong parentheses")
+    if parent_level > 0:
+        perror("ERROR: Parentheses error")
 
 for i, t, v, p, f in token_expr:
     if verbose:
-        print(f'{i:<4}|{t:<8}|{v:<4}|{p:<2}|{f}')
+        print(f'{i:<4}|{t:<8}|{v:<12}|{p:<2}|{f}')
 
 stack = []
 queue = []
 for token in token_expr:
     if not stack:
         queue.append(token)
-    if stack and (precedence[token[1]] < precedence[stack[-1][1] ):
+    if stack and (precedence[token[1]] < precedence[stack[-1][1]]):
         queue.append(token)
+    if stack and (precedence[token[1]] < precedence[stack[-1][1]]):
+        stack.append(token)
+    print(token, '\n\tSTACK:', ' '.join((v for i, t, v, p, f in stack)), '\n\tQUEUE:',
+          ' '.join((v for i, t, v, p, f in queue)))
 
 
 

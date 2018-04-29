@@ -1,5 +1,11 @@
 import operator
 import re
+import sys
+
+
+def perror(str):
+    print(str, file=sys.stderr)
+    sys.exit(1)
 
 tokens = (
     ('FLOAT', re.compile(r'\d*\.\d+')),
