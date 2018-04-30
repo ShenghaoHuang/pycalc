@@ -47,33 +47,33 @@ token_ops = (
     ('NE', operator.ne),
 )
 precedence = {
-    'FLOAT': 0,
-    'INTEGER': 0,
-    'CONST': 0,
+    'LPARENT': 0,
+    'RPARENT': 0,
 
-    'EQUALS': 1,
-    'NE': 1,
+    'FUNC': 1,
+    'FRPARENT': 1,
 
-    'LE': 2,
-    'LT': 2,
-    'GE': 2,
-    'GT': 2,
+    'EQUALS': 2,
+    'NE': 2,
 
-    'PLUS': 3,
-    'MINUS': 3,
+    'LE': 3,
+    'LT': 3,
+    'GE': 3,
+    'GT': 3,
 
-    'TIMES': 4,
-    'DIVIDE': 4,
-    'FDIVIDE': 4,
-    'MODULO': 4,
+    'PLUS': 4,
+    'MINUS': 4,
 
-    'POWER': 5,
+    'TIMES': 5,
+    'DIVIDE': 5,
+    'FDIVIDE': 5,
+    'MODULO': 5,
 
-    'COMMA': 6,
+    'POWER': 6,
 
-    'FUNC': 7,
-    'FRPARENT': 7,
+    'COMMA': 7,
 
-    'LPARENT': 8,
-    'RPARENT': 8,
+    'FLOAT': 8,
+    'INTEGER': 8,
+    'CONST': 8,
 }
