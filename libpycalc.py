@@ -7,6 +7,20 @@ def perror(str):
     print(str, file=sys.stderr)
     sys.exit(1)
 
+
+def findattr(str):
+    attr = getattr(sys.modules['builtins'], str, None)
+    if attr:
+        return attr
+
+    attr = sys.modules['__main__']
+    try:
+        for x in str.split('.'):
+            attr = getattr(attr, x)
+    except AttributeError:
+        perror("ERROR: unknown attribute")
+    return attr
+
 tokens = (
     ('FLOAT', re.compile(r'\d*\.\d+')),
     ('INTEGER', re.compile(r'\d+')),
@@ -15,12 +29,12 @@ tokens = (
     ('PLUS', re.compile(r'\+')),
     ('MINUS', re.compile(r'-')),
     ('TIMES', re.compile(r'\*')),
+    ('FDIVIDE', re.compile(r'//')),
     ('DIVIDE', re.compile(r'/')),
     ('FUNC', re.compile(r'[a-zA-Z_][a-zA-Z0-9_.]*\(')),  # TODO : add func.() exception
     ('CONST', re.compile(r'[a-zA-Z_][a-zA-Z0-9_.]*')),  # TODO : same
     ('COMMA', re.compile(r'\,')),
     ('POWER', re.compile(r'\^')),
-    ('FDIVIDE', re.compile(r'//')),
     ('MODULO', re.compile(r'%')),
     ('EQUALS', re.compile(r'==')),
     ('LE', re.compile(r'<=')),
@@ -29,23 +43,28 @@ tokens = (
     ('GT', re.compile(r'>')),
     ('NE', re.compile(r'!=')),
 )
-token_ops = (
-    ('FLOAT', float),
-    ('INTEGER', int),
-    ('PLUS', operator.add),
-    ('MINUS', operator.sub),
-    ('TIMES', operator.mul),
-    ('DIVIDE', operator.truediv),
-    ('POWER', operator.pow),
-    ('FDIVIDE', operator.floordiv),
-    ('MODULO', operator.mod),
-    ('EQUALS', operator.eq),
-    ('LE', operator.le),
-    ('LT', operator.lt),
-    ('GE', operator.ge),
-    ('GT', operator.gt),
-    ('NE', operator.ne),
-)
+token_ops = {
+    'FLOAT': float,
+    'INTEGER': int,
+    'COMMA': str,
+    'ARGS': bool,
+    'CONST': findattr,
+    'FUNC': findattr,
+    'PLUS': operator.add,
+    'MINUS': operator.sub,
+    'TIMES': operator.mul,
+    'DIVIDE': operator.truediv,
+    'POWER': operator.pow,
+    'FDIVIDE': operator.floordiv,
+    'MODULO': operator.mod,
+    'EQUALS': operator.eq,
+    'LE': operator.le,
+    'LT': operator.lt,
+    'GE': operator.ge,
+    'GT': operator.gt,
+    'NE': operator.ne,
+}
+
 precedence = {
     'LPARENT': 0,
     'RPARENT': 0,

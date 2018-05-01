@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 
-# https://blog.kallisti.net.nz/2008/02/extension-to-the-shunting-yard-algorithm-to-allow-variable-numbers-of-arguments-to-functions/
-
 import argparse
 import string
 from libpycalc import *
-
 
 parser = argparse.ArgumentParser("pycalc", description='Pure-python command-line calculator',
                                  usage='%(prog)s EXPRESSION [-h] [-v] [-m [MODULE [MODULE ...]]]')
@@ -15,6 +12,7 @@ parser.add_argument('-v', '--verbose', action='store_true', help='print verbose 
 args = parser.parse_args()
 verbose = args.verbose
 expr = args.EXPRESSION
+
 expr = re.sub(r'[^{}]'.format(string.ascii_letters + string.digits + r'+\-*/^%><=,.!_()'), '', expr)
 expr = re.sub(r'^-', r'0-', expr)
 expr = re.sub(r'\(-', r'(0-', expr)
@@ -64,22 +62,23 @@ for (i, t, v) in token_expr:  # Check parentheses, mark function right parent., 
         parent_level -= 1
         if parent_level < 0:
             perror("ERROR: Parentheses error")
-    token_expr[i] = (i, t, v, parent_level, func_levels[:])
+    token_expr[i] = (i, t, v)
 else:
     if parent_level > 0:
         perror("ERROR: Parentheses error")
 
-for i, t, v, p, f in token_expr:
+for i, t, v in token_expr:
     if verbose:
-        print(f'{i:<4}|{t:<8}|{v:<12}|{p:<2}|{f}')
+        print(f'{t:<8}|{v:<12}')
 
 stack = []
 queue = []
+have_args = []
 for token in token_expr:  # Shunting-yard algorithm
     if verbose:
         print(
-            '===\nSTACK:', ' '.join((v for i, t, v, p, f in stack)),
-            '\nQUEUE:', ' '.join((v for i, t, v, p, f in queue)),
+            '===\nSTACK:', ' '.join((str(v) for i, t, v in stack)),
+            '\nQUEUE:', ' '.join((str(v) for i, t, v in queue)),
             '\nTOKEN:', *token,
         )
 
@@ -87,8 +86,20 @@ for token in token_expr:  # Shunting-yard algorithm
         queue.append(token)
         continue
 
+    if token[1] == 'FUNC':
+        stack.append(token)
+        if token_expr[token[0] + 1][1] == 'FRPARENT':
+            have_args.append(False)
+        else:
+            have_args.append(True)
+        continue
+
     if not stack:
         stack.append(token)
+        continue
+
+    if token[1] == 'COMMA':
+        queue.append(token)
         continue
 
     if token[1] == 'LPARENT':
@@ -99,6 +110,13 @@ for token in token_expr:  # Shunting-yard algorithm
         while stack[-1][1] != 'LPARENT':
             queue.append(stack.pop())
         stack.pop()
+        continue
+
+    if stack and (token[1] == 'FRPARENT'):
+        while stack[-1][1] != 'FUNC':
+            queue.append(stack.pop())
+        queue.append(('', 'ARGS', have_args.pop()))
+        queue.append(stack.pop())
         continue
 
     if stack and (precedence[token[1]] <= precedence[stack[-1][1]]):
@@ -113,14 +131,39 @@ for token in token_expr:  # Shunting-yard algorithm
         stack.append(token)
 while stack:
     queue.append(stack.pop())
+if verbose:
+    print('===\nSTACK:', ' '.join((str(v) for i, t, v in stack)),
+          '\nQUEUE:', ' '.join((str(v) for i, t, v in queue)),
+          )
 
-print('===\nSTACK:', ' '.join((v for i, t, v, p, f in stack)),
-      '\nQUEUE:', ' '.join((v for i, t, v, p, f in queue)),
-      )
+rpn_stack = []
+for q in queue:
+    if q[1] in ('FLOAT', 'INTEGER', 'CONST', 'COMMA', 'ARGS'):
+        rpn_stack.append(token_ops[q[1]](q[2]))
+        continue
+    if q[1] == 'FUNC':
+        func_args = []
+        if rpn_stack.pop():
+            func_args.append(rpn_stack.pop())
+        while rpn_stack and rpn_stack[-1] == ',':
+            rpn_stack.pop()
+            func_args.append(rpn_stack.pop())
+        func_args = reversed(func_args)
+        rpn_stack.append(token_ops[q[1]](q[2][:-1])(*func_args))
+        continue
+    try:
+        b, a = rpn_stack.pop(), rpn_stack.pop()
+        rpn_stack.append(token_ops[q[1]](a, b))
+    except ZeroDivisionError:
+        perror("ERROR: division by zero")
+    # except:
+    #     perror("ERROR: Computation error")
 
-# result = 0
-#
-# if verbose:
-#     print('RESULT:\t', result)
-# else:
-#     print(result)
+result = rpn_stack.pop()
+if rpn_stack:
+    perror("rpn_stack not empty")
+
+if verbose:
+    print('RESULT:\t', result)
+else:
+    print(result, end='')
