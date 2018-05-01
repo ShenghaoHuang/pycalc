@@ -45,7 +45,6 @@ while expr:
         perror("ERROR: EXPRESSION Tokenize Error")
 token_expr = [(i, t, v) for i, (t, v) in enumerate(token_expr)]
 
-
 parent_level = 0
 func_levels = []
 for (i, t, v) in token_expr:  # Check parentheses, mark function right parent., check comma position

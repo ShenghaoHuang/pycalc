@@ -21,6 +21,7 @@ def findattr(str):
         perror("ERROR: unknown attribute")
     return attr
 
+
 tokens = (
     ('FLOAT', re.compile(r'\d*\.\d+')),
     ('INTEGER', re.compile(r'\d+')),
