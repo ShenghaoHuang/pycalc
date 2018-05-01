@@ -16,6 +16,7 @@ expr = args.EXPRESSION
 expr = re.sub(r'[^{}]'.format(string.ascii_letters + string.digits + r'+\-*/^%><=,.!_()'), '', expr)
 expr = re.sub(r'^-', r'0-', expr)
 expr = re.sub(r'\(-', r'(0-', expr)
+expr = re.sub(r'\,-', r',0-', expr)
 expr = re.sub(r'(\d)\(', r'\1*(', expr)
 expr = re.sub(r'(\d)([a-zA-Z_])', r'\1*\2', expr)
 
@@ -99,6 +100,8 @@ for token in token_expr:  # Shunting-yard algorithm
         continue
 
     if token[1] == 'COMMA':
+        while stack[-1][1] != 'FUNC':
+            queue.append(stack.pop())
         queue.append(token)
         continue
 
@@ -149,7 +152,10 @@ for q in queue:
             rpn_stack.pop()
             func_args.append(rpn_stack.pop())
         func_args = reversed(func_args)
-        rpn_stack.append(token_ops[q[1]](q[2][:-1])(*func_args))
+        try:
+            rpn_stack.append(token_ops[q[1]](q[2][:-1])(*func_args))
+        except:
+            perror("ERROR: Function error")
         continue
     try:
         b, a = rpn_stack.pop(), rpn_stack.pop()
