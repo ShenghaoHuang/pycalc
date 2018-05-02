@@ -108,13 +108,6 @@ def _postfix_queue(token_expr, precedence):
     queue = []
     have_args = []
     for token in token_expr:
-        if _verbose:
-            print(
-                '===\nSTACK:', ' '.join((str(v) for i, t, v in stack)),
-                '\nQUEUE:', ' '.join((str(v) for i, t, v in queue)),
-                '\nTOKEN:', *token,
-            )
-
         if token[1] in ('FLOAT', 'INTEGER', 'CONST'):
             queue.append(token)
             continue
@@ -175,7 +168,7 @@ def _rpn_calc(queue, token_ops):
         if q[1] in ('FLOAT', 'INTEGER', 'CONST', 'COMMA', 'ARGS'):
             rpn_stack.append(token_ops[q[1]](q[2]))
             continue
-        if q[1] == 'FUNC':
+        elif q[1] == 'FUNC':
             func_args = []
             if rpn_stack.pop():
                 func_args.append(rpn_stack.pop())
@@ -188,13 +181,14 @@ def _rpn_calc(queue, token_ops):
             except:
                 _perror("ERROR: Function error")
             continue
-        try:
-            b, a = rpn_stack.pop(), rpn_stack.pop()
-            rpn_stack.append(token_ops[q[1]](a, b))
-        except ZeroDivisionError:
-            _perror("ERROR: division by zero")
-        except:
-            _perror("ERROR: Computation error")
+        else:
+            try:
+                b, a = rpn_stack.pop(), rpn_stack.pop()
+                rpn_stack.append(token_ops[q[1]](a, b))
+            except ZeroDivisionError:
+                _perror("ERROR: division by zero")
+            except:
+                _perror("ERROR: Computation error")
     return rpn_stack.pop()
 
 
@@ -243,7 +237,7 @@ def calc(expr, modules, verbose):
         'GE': operator.ge,
         'GT': operator.gt,
         'NE': operator.ne,
-    }       # TODO insert in tokens
+    }
 
     _precedence = {
         'LPARENT': 0,
