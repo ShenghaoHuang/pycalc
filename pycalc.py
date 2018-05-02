@@ -2,10 +2,10 @@
 
 import argparse
 import operator
-import re
-import string
 import math
 import sys
+import re
+from string import ascii_letters, digits
 
 
 def _perror(error_msg):
@@ -40,17 +40,11 @@ def _find_attr(attr_name):
 
 
 def _modify_expr(expr):
-    expr = re.sub(r'[^{}]'.format(string.ascii_letters + string.digits + r'+\-*/^%><=,.!_()'), '', expr)
-
-    expr = re.sub(r'^-', r'0-', expr)  # TODO: optimize regexp
-    expr = re.sub(r'\(-', r'(0-', expr)
-    expr = re.sub(r',-', r',0-', expr)
-    expr = re.sub(r'^\+', r'0\+', expr)
-    expr = re.sub(r'\(\+', r'(0\+', expr)
-    expr = re.sub(r',\+', r',0\+', expr)
-
-    expr = re.sub(r'(\d)\(', r'\1*(', expr)
-    expr = re.sub(r'(\d)([a-zA-Z_])', r'\1*\2', expr)
+    expr = re.sub(r'[^{}]'.format(ascii_letters + digits + r'+\-*/^%><=,.!_()'), '', expr)  # filter
+    expr = re.sub(r'(^[-\+])', r'0\g<1>', expr)             # unary -/+ changes to 0-/+
+    expr = re.sub(r'([(,])([-\+])', r'\g<1>0\g<2>', expr)   # --//--
+    expr = re.sub(r'(\d)\(', r'\g<1>*(', expr)              # 2(...) changes to 2*(...)
+    expr = re.sub(r'(\d)([a-zA-Z_])', r'\g<1>*\g<2>', expr) # 2pi changes to 2*pi
     return expr
 
 
@@ -291,8 +285,7 @@ def calc(expr, modules, verbose):
 
 
 def main():
-    (_expr, _use_modules, _verbose) = _parse_args()
-    result = calc(_expr, _use_modules, _verbose)
+    result = calc(*_parse_args())
     print(result)
 
 
