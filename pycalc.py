@@ -41,10 +41,12 @@ def _find_attr(attr_name):
 
 def _modify_expr(expr):
     expr = re.sub(r'[^{}]'.format(ascii_letters + digits + r'+\-*/^%><=,.!_()'), '', expr)  # filter
-    expr = re.sub(r'(^[-\+])', r'0\g<1>', expr)             # unary -/+ changes to 0-/+
-    expr = re.sub(r'([(,])([-\+])', r'\g<1>0\g<2>', expr)   # --//--
-    expr = re.sub(r'(\d)\(', r'\g<1>*(', expr)              # 2(...) changes to 2*(...)
-    expr = re.sub(r'(\d)([a-zA-Z_])', r'\g<1>*\g<2>', expr) # 2pi changes to 2*pi
+    expr = re.sub(r'(^[-\+])', r'0\g<1>', expr)                     # unary -/+ changes to 0-/+
+    expr = re.sub(r'([(,])([-\+])', r'\g<1>0\g<2>', expr)           # --//--
+    expr = re.sub(r'(\d)\(', r'\g<1>*(', expr)                      # 2(...) changes to 2*(...)
+    expr = re.sub(r'\)(\d)', r')*\g<1>', expr)                      # (...)2 changes to (...)*2
+    expr = re.sub(r',\)', r')', expr)
+    expr = re.sub(r'(\d)([a-ik-zA-IK-Z_])', r'\g<1>*\g<2>', expr)   # 2pi changes to 2*pi, except 2j TODO: 2jconst
     return expr
 
 
@@ -108,7 +110,7 @@ def _postfix_queue(token_expr, precedence):
     queue = []
     have_args = []
     for token in token_expr:
-        if token[1] in ('FLOAT', 'INTEGER', 'CONST'):
+        if token[1] in ('FLOAT', 'INTEGER', 'CONST', 'COMPLEX'):
             queue.append(token)
             continue
 
@@ -165,7 +167,7 @@ def _postfix_queue(token_expr, precedence):
 def _rpn_calc(queue, token_ops):
     rpn_stack = []
     for q in queue:
-        if q[1] in ('FLOAT', 'INTEGER', 'CONST', 'COMMA', 'ARGS'):
+        if q[1] in ('FLOAT', 'INTEGER', 'COMPLEX', 'CONST', 'COMMA', 'ARGS'):
             rpn_stack.append(token_ops[q[1]](q[2]))
             continue
         elif q[1] == 'FUNC':
@@ -197,6 +199,7 @@ def calc(expr, modules, verbose):
     _verbose = verbose
     _tokens = (
         ('FLOAT', re.compile(r'\d*\.\d+')),
+        ('COMPLEX', re.compile(r'\d+[jJ]')),
         ('INTEGER', re.compile(r'\d+')),
         ('LPARENT', re.compile(r'\(')),
         ('RPARENT', re.compile(r'\)')),
@@ -205,7 +208,8 @@ def calc(expr, modules, verbose):
         ('TIMES', re.compile(r'\*')),
         ('FDIVIDE', re.compile(r'//')),
         ('DIVIDE', re.compile(r'/')),
-        ('FUNC', re.compile(r'[a-zA-Z_][a-zA-Z0-9_.]*\(')),  # TODO : add func.() exception
+        ('FUNC', re.compile(r'[a-zA-Z_][a-zA-Z0-9_.]*'
+                            r'\(')),  # TODO : add func.() exception
         ('CONST', re.compile(r'[a-zA-Z_][a-zA-Z0-9_.]*')),  # TODO : same
         ('COMMA', re.compile(r',')),
         ('POWER', re.compile(r'\^')),
@@ -220,6 +224,7 @@ def calc(expr, modules, verbose):
     _token_ops = {
         'FLOAT': float,
         'INTEGER': int,
+        'COMPLEX': complex,
         'COMMA': str,
         'ARGS': bool,
         'CONST': _find_attr,
@@ -269,10 +274,13 @@ def calc(expr, modules, verbose):
         'FLOAT': 8,
         'INTEGER': 8,
         'CONST': 8,
+        'COMPLEX': 8,
     }
     expr = _modify_expr(expr)
+    print(expr)
     _import_modules(modules)
     _token_expr = _tokenize_expr(expr, _tokens)
+    print(_token_expr)
     _token_expr = _check_parentheses(_token_expr)
     _queue = _postfix_queue(_token_expr, _precedence)
     return _rpn_calc(_queue, _token_ops)
