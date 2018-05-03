@@ -8,18 +8,15 @@ import operator
 import math
 import sys
 import re
-from collections import deque
+from collections import deque, namedtuple, OrderedDict
+from pprint import pprint
+
 from string import ascii_letters as _letters, digits as _digits
 
 
 def _perror(error_msg):
     print(error_msg, file=sys.stderr)
     sys.exit(1)
-
-
-def _vprint(*args):
-    if _verbose:
-        print(*args)
 
 
 def _parse_args():
@@ -64,8 +61,6 @@ def _import_modules(modules):
         for module in modules:
             try:
                 globals()[module] = __import__(module)  # TODO importlib.import_module()
-                if _verbose:
-                    print('IMPORT:\t', module)
             except ModuleNotFoundError:
                 _perror("ERROR:\t Module not found:" + module)
 
@@ -73,7 +68,7 @@ def _import_modules(modules):
 def _tokenize_expr(expr, tokens):
     token_expr = deque()
     while expr:
-        for (t, t_re) in tokens:
+        for (t, (t_re, _, _)) in tokens.items():
             t_match = t_re.match(expr)
             if t_match:
                 token_expr.append((t, t_match.group()))
@@ -81,7 +76,7 @@ def _tokenize_expr(expr, tokens):
                 break
         else:
             _perror("ERROR: EXPRESSION Tokenize Error")
-    return [(i, t, v) for i, (t, v) in enumerate(token_expr)]
+    return [_t_nt(i, t, v) for i, (t, v) in enumerate(token_expr)]
 
 
 def _check_parentheses(token_expr):
@@ -98,7 +93,7 @@ def _check_parentheses(token_expr):
         if t == 'RPARENT':
             if func_levels and func_levels[-1] == parent_level:
                 t = 'FRPARENT'
-                token_expr[i] = (i, t, v)
+                token_expr[i] = _t_nt(i, t, v)
                 func_levels.pop()
             parent_level -= 1
             if parent_level < 0:
@@ -109,39 +104,39 @@ def _check_parentheses(token_expr):
     return token_expr
 
 
-def _postfix_queue(token_expr, precedence):
+def _postfix_queue(token_expr, tokens):
     stack = deque()
     queue = deque()
     have_args = deque()
     for token in token_expr:
-        if token[1] in ('FLOAT', 'INTEGER', 'CONST', 'COMPLEX'):
+        if token.type in ('FLOAT', 'INTEGER', 'CONST', 'COMPLEX'):
             queue.append(token)
-        elif token[1] == 'FUNC':
+        elif token.type == 'FUNC':
             stack.append(token)
-            if token_expr[token[0] + 1][1] == 'FRPARENT':
+            if token_expr[token.index + 1].type == 'FRPARENT':
                 have_args.append(False)
             else:
                 have_args.append(True)
         elif not stack:
             stack.append(token)
-        elif token[1] == 'COMMA':
-            while stack[-1][1] != 'FUNC':
+        elif token.type == 'COMMA':
+            while stack[-1].type != 'FUNC':
                 queue.append(stack.pop())
             queue.append(token)
-        elif token[1] == 'LPARENT':
+        elif token.type == 'LPARENT':
             stack.append(token)
-        elif stack and (token[1] == 'RPARENT'):
-            while stack[-1][1] != 'LPARENT':
+        elif stack and (token.type == 'RPARENT'):
+            while stack[-1].type != 'LPARENT':
                 queue.append(stack.pop())
             stack.pop()
-        elif stack and (token[1] == 'FRPARENT'):
-            while stack[-1][1] != 'FUNC':
+        elif stack and (token.type == 'FRPARENT'):
+            while stack[-1].type != 'FUNC':
                 queue.append(stack.pop())
-            queue.append(('', 'ARGS', have_args.pop()))
+            queue.append(_t_nt('', 'ARGS', have_args.pop()))
             queue.append(stack.pop())
-        elif stack and (precedence[token[1]] <= precedence[stack[-1][1]]):
+        elif stack and (tokens[token.type].precedence <= tokens[stack[-1].type].precedence):
             while stack:
-                if precedence[token[1]] <= precedence[stack[-1][1]]:
+                if tokens[token.type].precedence <= tokens[stack[-1].type].precedence:
                     queue.append(stack.pop())
                     continue
                 else:
@@ -154,13 +149,13 @@ def _postfix_queue(token_expr, precedence):
     return queue
 
 
-def _rpn_calc(queue, token_ops):
+def _rpn_calc(queue, tokens):
     rpn_stack = deque()
     for q in queue:
-        if q[1] in ('FLOAT', 'INTEGER', 'COMPLEX', 'CONST', 'COMMA', 'ARGS'):
-            rpn_stack.append(token_ops[q[1]](q[2]))
+        if q.type in ('FLOAT', 'INTEGER', 'COMPLEX', 'CONST', 'COMMA', 'ARGS'):
+            rpn_stack.append(tokens[q.type].operator(q.value))
             continue
-        elif q[1] == 'FUNC':
+        elif q.type == 'FUNC':
             func_args = deque()
             if rpn_stack.pop():
                 func_args.append(rpn_stack.pop())
@@ -169,14 +164,14 @@ def _rpn_calc(queue, token_ops):
                 func_args.append(rpn_stack.pop())
             func_args.reverse()
             try:
-                rpn_stack.append(token_ops[q[1]](q[2][:-1])(*func_args))
+                rpn_stack.append(tokens[q.type].operator(q.value[:-1])(*func_args))
             except:
                 _perror("ERROR: Function error")
             continue
         else:
             try:
                 b, a = rpn_stack.pop(), rpn_stack.pop()
-                rpn_stack.append(token_ops[q[1]](a, b))
+                rpn_stack.append(tokens[q.type].operator(a, b))
             except ZeroDivisionError:
                 _perror("ERROR: division by zero")
             except:
@@ -192,87 +187,43 @@ def calc(expr, modules, verbose):
     :param verbose: Print verbose information
     :return: Result of calculation
     """
-    global _verbose     # TODO refactor
-    _verbose = verbose
-    _tokens = (
-        ('FLOAT', re.compile(r'\d*\.\d+')),
-        ('COMPLEX', re.compile(r'\d+[jJ]')),
-        ('INTEGER', re.compile(r'\d+')),
-        ('LPARENT', re.compile(r'\(')),
-        ('RPARENT', re.compile(r'\)')),
-        ('PLUS', re.compile(r'\+')),
-        ('MINUS', re.compile(r'-')),
-        ('TIMES', re.compile(r'\*')),
-        ('FDIVIDE', re.compile(r'//')),
-        ('DIVIDE', re.compile(r'/')),
-        ('FUNC', re.compile(r'[a-zA-Z_][a-zA-Z0-9_.]*\(')),  # TODO : add func.() exception
-        ('CONST', re.compile(r'[a-zA-Z_][a-zA-Z0-9_.]*')),  # TODO : same
-        ('COMMA', re.compile(r',')),
-        ('POWER', re.compile(r'\^')),
-        ('MODULO', re.compile(r'%')),
-        ('EQUALS', re.compile(r'==')),
-        ('LE', re.compile(r'<=')),
-        ('LT', re.compile(r'<')),
-        ('GE', re.compile(r'>=')),
-        ('GT', re.compile(r'>')),
-        ('NE', re.compile(r'!=')),
-    )
-    _token_ops = {
-        'FLOAT': float,
-        'INTEGER': int,
-        'COMPLEX': complex,
-        'COMMA': str,
-        'ARGS': bool,
-        'CONST': _find_attr,
-        'FUNC': _find_attr,
-        'PLUS': operator.add,
-        'MINUS': operator.sub,
-        'TIMES': operator.mul,
-        'DIVIDE': operator.truediv,
-        'POWER': operator.pow,
-        'FDIVIDE': operator.floordiv,
-        'MODULO': operator.mod,
-        'EQUALS': operator.eq,
-        'LE': operator.le,
-        'LT': operator.lt,
-        'GE': operator.ge,
-        'GT': operator.gt,
-        'NE': operator.ne,
-    }
+    global _t_nt
+    _t_nt = namedtuple('token', 'index, type, value')
+    _token = namedtuple('Token', 're, operator, precedence')
+    _tokens = OrderedDict([
+        ('FLOAT',   _token(re.compile(r'\d*\.\d+'),                  float,              8)),
+        ('COMPLEX', _token(re.compile(r'\d+[jJ]'),                   complex,            8)),
+        ('INTEGER', _token(re.compile(r'\d+'),                       int,                8)),
+        ('LPARENT', _token(re.compile(r'\('),                        str,                0)),
+        ('RPARENT', _token(re.compile(r'\)'),                        str,                0)),
+        ('PLUS',    _token(re.compile(r'\+'),                        operator.add,       4)),
+        ('MINUS',   _token(re.compile(r'-'),                         operator.sub,       4)),
+        ('TIMES',   _token(re.compile(r'\*'),                        operator.mul,       5)),
+        ('FDIVIDE', _token(re.compile(r'//'),                        operator.floordiv,  5)),
+        ('DIVIDE',  _token(re.compile(r'/'),                         operator.truediv,   5)),
+        ('FUNC',    _token(re.compile(r'[a-zA-Z_][a-zA-Z0-9_.]*\('), _find_attr,         1)),  # TODO : add func.() exception
+        ('CONST',   _token(re.compile(r'[a-zA-Z_][a-zA-Z0-9_.]*'),   _find_attr,         8)),  # TODO : same
+        ('COMMA',   _token(re.compile(r','),                         str,                7)),
+        ('POWER',   _token(re.compile(r'\^'),                        operator.pow,       6)),
+        ('MODULO',  _token(re.compile(r'%'),                         operator.mod,       5)),
+        ('EQUALS',  _token(re.compile(r'=='),                        operator.eq,        2)),
+        ('LE',      _token(re.compile(r'<='),                        operator.le,        3)),
+        ('LT',      _token(re.compile(r'<'),                         operator.lt,        3)),
+        ('GE',      _token(re.compile(r'>='),                        operator.ge,        3)),
+        ('GT',      _token(re.compile(r'>'),                         operator.gt,        3)),
+        ('NE',      _token(re.compile(r'!='),                        operator.ne,        2)),
+        ('ARGS',    _token(re.compile(r'\\'),                        bool,               1)),
+    ])
 
-    _precedence = {
-        'LPARENT': 0,
-        'RPARENT': 0,
-        'FUNC': 1,
-        'FRPARENT': 1,
-        'EQUALS': 2,
-        'NE': 2,
-        'LE': 3,
-        'LT': 3,
-        'GE': 3,
-        'GT': 3,
-        'PLUS': 4,
-        'MINUS': 4,
-        'TIMES': 5,
-        'DIVIDE': 5,
-        'FDIVIDE': 5,
-        'MODULO': 5,
-        'POWER': 6,
-        'COMMA': 7,
-        'FLOAT': 8,
-        'INTEGER': 8,
-        'CONST': 8,
-        'COMPLEX': 8,
-    }
     expr = _modify_expr(expr)
-    _vprint("EXPR:\t", expr)
+    if verbose: print("EXPR:\t", expr)
     _import_modules(modules)
     _token_expr = _tokenize_expr(expr, _tokens)
     _token_expr = _check_parentheses(_token_expr)
-    _vprint('TOKENS:\t', ' '.join(str(v) for i,t,v in _token_expr))
-    _queue = _postfix_queue(_token_expr, _precedence)
-    _vprint('RPN:\t', ' '.join(str(v) for i,t,v in _queue))
-    return _rpn_calc(_queue, _token_ops)
+    if verbose: print('TOKENS:\t', ' '.join(str(v) for i,t,v in _token_expr))
+    _queue = _postfix_queue(_token_expr, _tokens)
+    if verbose: print('RPN:\t', ' '.join(str(v) for i,t,v in _queue))
+    return _rpn_calc(_queue, _tokens)
 
 
 def _main():
