@@ -1,16 +1,25 @@
 #!/usr/bin/env python3
-
+"""
+Module for calculating mathematical expressions.
+Use shunting-yard and reverse polish notation algorithms.
+"""
 import argparse
 import operator
 import math
 import sys
 import re
-from string import ascii_letters, digits
+from collections import deque
+from string import ascii_letters as _letters, digits as _digits
 
 
 def _perror(error_msg):
     print(error_msg, file=sys.stderr)
     sys.exit(1)
+
+
+def _vprint(*args):
+    if _verbose:
+        print(*args)
 
 
 def _parse_args():
@@ -40,7 +49,7 @@ def _find_attr(attr_name):
 
 
 def _modify_expr(expr):
-    expr = re.sub(r'[^{}]'.format(ascii_letters + digits + r'+\-*/^%><=,.!_()'), '', expr)  # filter
+    expr = re.sub(r'[^{}]'.format(_letters + _digits + r'+\-*/^%><=,.!_()'), '', expr)  # filter
     expr = re.sub(r'(^[-\+])', r'0\g<1>', expr)                     # unary -/+ changes to 0-/+
     expr = re.sub(r'([(,])([-\+])', r'\g<1>0\g<2>', expr)           # --//--
     expr = re.sub(r'(\d)\(', r'\g<1>*(', expr)                      # 2(...) changes to 2*(...)
@@ -54,7 +63,7 @@ def _import_modules(modules):
     if modules:
         for module in modules:
             try:
-                globals()[module] = __import__(module)
+                globals()[module] = __import__(module)  # TODO importlib.import_module()
                 if _verbose:
                     print('IMPORT:\t', module)
             except ModuleNotFoundError:
@@ -62,7 +71,7 @@ def _import_modules(modules):
 
 
 def _tokenize_expr(expr, tokens):
-    token_expr = []
+    token_expr = deque()
     while expr:
         for (t, t_re) in tokens:
             t_match = t_re.match(expr)
@@ -76,13 +85,8 @@ def _tokenize_expr(expr, tokens):
 
 
 def _check_parentheses(token_expr):
-    """
-    Check parentheses, mark function right parent., check comma position
-    :param token_expr:
-    :return:
-    """
     parent_level = 0
-    func_levels = []
+    func_levels = deque()
     for (i, t, v) in token_expr:
         if t == 'LPARENT':
             parent_level += 1
@@ -94,11 +98,11 @@ def _check_parentheses(token_expr):
         if t == 'RPARENT':
             if func_levels and func_levels[-1] == parent_level:
                 t = 'FRPARENT'
+                token_expr[i] = (i, t, v)
                 func_levels.pop()
             parent_level -= 1
             if parent_level < 0:
                 _perror("ERROR: Parentheses balance error")
-        token_expr[i] = (i, t, v)
     else:
         if parent_level > 0:
             _perror("ERROR: Parentheses balance error")
@@ -106,50 +110,36 @@ def _check_parentheses(token_expr):
 
 
 def _postfix_queue(token_expr, precedence):
-    stack = []
-    queue = []
-    have_args = []
+    stack = deque()
+    queue = deque()
+    have_args = deque()
     for token in token_expr:
         if token[1] in ('FLOAT', 'INTEGER', 'CONST', 'COMPLEX'):
             queue.append(token)
-            continue
-
-        if token[1] == 'FUNC':
+        elif token[1] == 'FUNC':
             stack.append(token)
             if token_expr[token[0] + 1][1] == 'FRPARENT':
                 have_args.append(False)
             else:
                 have_args.append(True)
-            continue
-
-        if not stack:
+        elif not stack:
             stack.append(token)
-            continue
-
-        if token[1] == 'COMMA':
+        elif token[1] == 'COMMA':
             while stack[-1][1] != 'FUNC':
                 queue.append(stack.pop())
             queue.append(token)
-            continue
-
-        if token[1] == 'LPARENT':
+        elif token[1] == 'LPARENT':
             stack.append(token)
-            continue
-
-        if stack and (token[1] == 'RPARENT'):
+        elif stack and (token[1] == 'RPARENT'):
             while stack[-1][1] != 'LPARENT':
                 queue.append(stack.pop())
             stack.pop()
-            continue
-
-        if stack and (token[1] == 'FRPARENT'):
+        elif stack and (token[1] == 'FRPARENT'):
             while stack[-1][1] != 'FUNC':
                 queue.append(stack.pop())
             queue.append(('', 'ARGS', have_args.pop()))
             queue.append(stack.pop())
-            continue
-
-        if stack and (precedence[token[1]] <= precedence[stack[-1][1]]):
+        elif stack and (precedence[token[1]] <= precedence[stack[-1][1]]):
             while stack:
                 if precedence[token[1]] <= precedence[stack[-1][1]]:
                     queue.append(stack.pop())
@@ -165,19 +155,19 @@ def _postfix_queue(token_expr, precedence):
 
 
 def _rpn_calc(queue, token_ops):
-    rpn_stack = []
+    rpn_stack = deque()
     for q in queue:
         if q[1] in ('FLOAT', 'INTEGER', 'COMPLEX', 'CONST', 'COMMA', 'ARGS'):
             rpn_stack.append(token_ops[q[1]](q[2]))
             continue
         elif q[1] == 'FUNC':
-            func_args = []
+            func_args = deque()
             if rpn_stack.pop():
                 func_args.append(rpn_stack.pop())
             while rpn_stack and rpn_stack[-1] == ',':
                 rpn_stack.pop()
                 func_args.append(rpn_stack.pop())
-            func_args = reversed(func_args)
+            func_args.reverse()
             try:
                 rpn_stack.append(token_ops[q[1]](q[2][:-1])(*func_args))
             except:
@@ -195,6 +185,13 @@ def _rpn_calc(queue, token_ops):
 
 
 def calc(expr, modules, verbose):
+    """
+    Calculate expression.
+    :param expr: EXPRESSION for calculation
+    :param modules: Additional modules
+    :param verbose: Print verbose information
+    :return: Result of calculation
+    """
     global _verbose     # TODO refactor
     _verbose = verbose
     _tokens = (
@@ -208,8 +205,7 @@ def calc(expr, modules, verbose):
         ('TIMES', re.compile(r'\*')),
         ('FDIVIDE', re.compile(r'//')),
         ('DIVIDE', re.compile(r'/')),
-        ('FUNC', re.compile(r'[a-zA-Z_][a-zA-Z0-9_.]*'
-                            r'\(')),  # TODO : add func.() exception
+        ('FUNC', re.compile(r'[a-zA-Z_][a-zA-Z0-9_.]*\(')),  # TODO : add func.() exception
         ('CONST', re.compile(r'[a-zA-Z_][a-zA-Z0-9_.]*')),  # TODO : same
         ('COMMA', re.compile(r',')),
         ('POWER', re.compile(r'\^')),
@@ -247,49 +243,42 @@ def calc(expr, modules, verbose):
     _precedence = {
         'LPARENT': 0,
         'RPARENT': 0,
-
         'FUNC': 1,
         'FRPARENT': 1,
-
         'EQUALS': 2,
         'NE': 2,
-
         'LE': 3,
         'LT': 3,
         'GE': 3,
         'GT': 3,
-
         'PLUS': 4,
         'MINUS': 4,
-
         'TIMES': 5,
         'DIVIDE': 5,
         'FDIVIDE': 5,
         'MODULO': 5,
-
         'POWER': 6,
-
         'COMMA': 7,
-
         'FLOAT': 8,
         'INTEGER': 8,
         'CONST': 8,
         'COMPLEX': 8,
     }
     expr = _modify_expr(expr)
-    print(expr)
+    _vprint("EXPR:\t", expr)
     _import_modules(modules)
     _token_expr = _tokenize_expr(expr, _tokens)
-    print(_token_expr)
     _token_expr = _check_parentheses(_token_expr)
+    _vprint('TOKENS:\t', ' '.join(str(v) for i,t,v in _token_expr))
     _queue = _postfix_queue(_token_expr, _precedence)
+    _vprint('RPN:\t', ' '.join(str(v) for i,t,v in _queue))
     return _rpn_calc(_queue, _token_ops)
 
 
-def main():
+def _main():
     result = calc(*_parse_args())
     print(result)
 
 
 if __name__ == '__main__':
-    main()
+    _main()
