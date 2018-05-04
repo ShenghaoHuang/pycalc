@@ -49,9 +49,10 @@ def _modify_expr(expr):
     expr = re.sub(r'[^{}]'.format(_letters + _digits + r'+\-*/^%><=,.!_()'), '', expr)  # filter
     expr = re.sub(r'(^[-\+])', r'0\g<1>', expr)  # unary -/+ changes to 0-/+
     expr = re.sub(r'([(,])([-\+])', r'\g<1>0\g<2>', expr)  # --//--
-    expr = re.sub(r'(\d)\(', r'\g<1>*(', expr)  # 2(...) changes to 2*(...)
-    expr = re.sub(r'\)(\d)', r')*\g<1>', expr)  # (...)2 changes to (...)*2
+    expr = re.sub(r'([\da-zA-Z0-9_])\(', r'\g<1>*(', expr)  # 2(...) changes to 2*(...)
+    expr = re.sub(r'\)([\da-zA-Z0-9_])', r')*\g<1>', expr)  # (...)2 changes to (...)*2
     expr = re.sub(r',\)', r')', expr)  # (a,b,) => (a,b)
+    expr = re.sub(r'\)\(', r')*(', expr)  # (a,b,) => (a,b)
     expr = re.sub(r'(\d)([a-ik-zA-IK-Z_])', r'\g<1>*\g<2>', expr)  # 2pi changes to 2*pi, except 2j TODO: 2jconst
     return expr
 
