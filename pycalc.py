@@ -53,6 +53,11 @@ def _modify_expr(expr):
     expr = re.sub(r'\)([\da-zA-Z0-9_])', r')*\g<1>', expr)  # (...)2 changes to (...)*2
     expr = re.sub(r',\)', r')', expr)  # (a,b,) => (a,b)
     expr = re.sub(r'\)\(', r')*(', expr)  # (a,b,) => (a,b)
+    # id_expr = 0
+    # while id_expr != id(expr):
+    #     id_expr = id(expr)
+    #     expr = re.sub(r'\-\-|\+\+', r'+', expr)
+    #     expr = re.sub(r'\+\-|\-\+', r'-', expr)
     expr = re.sub(r'(\d)([a-ik-zA-IK-Z_])', r'\g<1>*\g<2>', expr)  # 2pi changes to 2*pi, except 2j TODO: 2jconst
     return expr
 
