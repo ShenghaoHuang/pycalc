@@ -30,40 +30,43 @@ def _parse_args():
 
 
 def _find_attr(attr_name):
-    attr = getattr(sys.modules['builtins'], attr_name, None)
-    if attr:
+    if '.' not in attr_name:
+        for module in globals()['_pc_modules']:
+            if attr_name in globals()[module].__dict__:
+                return getattr(globals()[module], attr_name)
+
+        attr = getattr(sys.modules['math'], attr_name, None)
+        if attr:
+            return attr
+
+        attr = getattr(sys.modules['builtins'], attr_name, None)
+        if attr:
+            return attr
+    else:
+        attr = sys.modules['__main__'] # TODO will work if imported?
+        try:
+            for name_part in attr_name.split('.'):
+                attr = getattr(attr, name_part)
+        except AttributeError:
+            _perror("ERROR: Can't find function or constant")
         return attr
-    attr = getattr(sys.modules['math'], attr_name, None)
-    if attr:
-        return attr
-    attr = sys.modules['__main__']
-    try:
-        for name_part in attr_name.split('.'):
-            attr = getattr(attr, name_part)
-    except AttributeError:
-        _perror("ERROR: Can't find function or constant")
-    return attr
 
 
 def _modify_expr(expr):
     expr = re.sub(r'[^{}]'.format(_letters + _digits + r'+\-*/^%><=,.!_()'), '', expr)  # filter
     expr = re.sub(r'(^[-\+])', r'0\g<1>', expr)  # unary -/+ changes to 0-/+
     expr = re.sub(r'([(,])([-\+])', r'\g<1>0\g<2>', expr)  # --//--
-    expr = re.sub(r'([\da-zA-Z0-9_])\(', r'\g<1>*(', expr)  # 2(...) changes to 2*(...)
-    expr = re.sub(r'\)([\da-zA-Z0-9_])', r')*\g<1>', expr)  # (...)2 changes to (...)*2
+    expr = re.sub(r'([\d])\(', r'\g<1>*(', expr)  # 2(...) changes to 2*(...)
+    expr = re.sub(r'\)([\d])', r')*\g<1>', expr)  # (...)2 changes to (...)*2
     expr = re.sub(r',\)', r')', expr)  # (a,b,) => (a,b)
     expr = re.sub(r'\)\(', r')*(', expr)  # (a,b,) => (a,b)
-    # id_expr = 0
-    # while id_expr != id(expr):
-    #     id_expr = id(expr)
-    #     expr = re.sub(r'\-\-|\+\+', r'+', expr)
-    #     expr = re.sub(r'\+\-|\-\+', r'-', expr)
     expr = re.sub(r'(\d)([a-ik-zA-IK-Z_])', r'\g<1>*\g<2>', expr)  # 2pi changes to 2*pi, except 2j TODO: 2jconst
     return expr
 
 
 def _import_modules(modules):
     if modules:
+        globals()['_pc_modules'] = modules
         for module in modules:
             try:
                 globals()[module] = __import__(module)  # TODO importlib.import_module()
@@ -156,7 +159,6 @@ def _rpn_calc(queue, tokens):
     for element in queue:
         if element.type in ('FLOAT', 'INTEGER', 'COMPLEX', 'CONST', 'COMMA', 'ARGS'):
             rpn_stack.append(tokens[element.type].operator(element.value))
-            continue
         elif element.type == 'FUNC':
             func_args = deque()
             if rpn_stack.pop():
@@ -169,7 +171,6 @@ def _rpn_calc(queue, tokens):
                 rpn_stack.append(tokens[element.type].operator(element.value[:-1])(*func_args))
             except:
                 _perror("ERROR: Function error")
-            continue
         else:
             try:
                 operand_2, operand_1 = rpn_stack.pop(), rpn_stack.pop()
@@ -198,13 +199,13 @@ def calc(expr, modules, verbose):
         ('RPARENT', _token(re.compile(r'\)'), str, 0)),
         ('PLUS', _token(re.compile(r'\+'), operator.add, 4)),
         ('MINUS', _token(re.compile(r'-'), operator.sub, 4)),
+        ('POWER', _token(re.compile(r'(\^)|(\*\*)'), operator.pow, 6)),
         ('TIMES', _token(re.compile(r'\*'), operator.mul, 5)),
         ('FDIVIDE', _token(re.compile(r'//'), operator.floordiv, 5)),
         ('DIVIDE', _token(re.compile(r'/'), operator.truediv, 5)),
         ('FUNC', _token(re.compile(r'[a-zA-Z_][a-zA-Z0-9_.]*\('), _find_attr, 1)),  # TODO : add func.() exception
         ('CONST', _token(re.compile(r'[a-zA-Z_][a-zA-Z0-9_.]*'), _find_attr, 8)),  # TODO : same
         ('COMMA', _token(re.compile(r','), str, 7)),
-        ('POWER', _token(re.compile(r'\^'), operator.pow, 6)),
         ('MODULO', _token(re.compile(r'%'), operator.mod, 5)),
         ('EQUALS', _token(re.compile(r'=='), operator.eq, 2)),
         ('LE', _token(re.compile(r'<='), operator.le, 3)),
