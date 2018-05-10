@@ -31,7 +31,7 @@ def _parse_args():
 
 def _find_attr(attr_name):
     if '.' not in attr_name:
-        for module in globals()['_pc_modules']:
+        for module in globals().get('_pc_modules', {}):
             if attr_name in globals()[module].__dict__:
                 return getattr(globals()[module], attr_name)
 
@@ -169,7 +169,7 @@ def _rpn_calc(queue, tokens):
             func_args.reverse()
             try:
                 rpn_stack.append(tokens[element.type].operator(element.value[:-1])(*func_args))
-            except:
+            except:  # pylint: disable=bare-except
                 _perror("ERROR: Function error")
         else:
             try:
@@ -177,12 +177,12 @@ def _rpn_calc(queue, tokens):
                 rpn_stack.append(tokens[element.type].operator(operand_1, operand_2))
             except ZeroDivisionError:
                 _perror("ERROR: division by zero")
-            except:
+            except:  # pylint: disable=bare-except
                 _perror("ERROR: Computation error")
     return rpn_stack.pop()
 
 
-def calc(expr, modules, verbose):
+def calc(expr, modules='', verbose=False):
     """
     Calculate expression.
     :param expr: EXPRESSION for calculation
