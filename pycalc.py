@@ -14,7 +14,7 @@ from string import ascii_letters as _letters, digits as _digits
 _t_nt = namedtuple('token', 'index, type, value')
 
 
-def _perror(error_msg):
+def _error(error_msg):
     print(error_msg, file=sys.stderr)
     sys.exit(1)  # TODO calc() return None?
 
@@ -48,19 +48,20 @@ def _find_attr(attr_name):
             for name_part in attr_name.split('.'):
                 attr = getattr(attr, name_part)
         except AttributeError:
-            _perror("ERROR: Can't find function or constant")
+            _error("ERROR: Can't find function or constant")
         return attr
 
 
 def _modify_expr(expr):
-    expr = re.sub(r'[^{}]'.format(_letters + _digits + r'+\-*/^%><=,.!_()'), '', expr)  # filter
-    expr = re.sub(r'(^[-\+])', r'0\g<1>', expr)  # unary -/+ changes to 0-/+
-    expr = re.sub(r'([(,])([-\+])', r'\g<1>0\g<2>', expr)  # --//--
-    expr = re.sub(r'([\d])\(', r'\g<1>*(', expr)  # 2(...) changes to 2*(...)
-    expr = re.sub(r'\)([\d])', r')*\g<1>', expr)  # (...)2 changes to (...)*2
-    expr = re.sub(r',\)', r')', expr)  # (a,b,) => (a,b)
-    expr = re.sub(r'\)\(', r')*(', expr)  # (a,b,) => (a,b)
-    expr = re.sub(r'(\d)([a-ik-zA-IK-Z_])', r'\g<1>*\g<2>', expr)  # 2pi changes to 2*pi, except 2j TODO: 2jconst
+    expr = re.sub(r'[^{}]'.format(_letters + _digits + r' +\-*/^%><=,.!_()'), '', expr)  # filter
+    # expr = re.sub(r'(^[-\+])', r'0\g<1>', expr)  # unary -/+ changes to 0-/+
+    # expr = re.sub(r'([(,])([-\+])', r'\g<1>0\g<2>', expr)  # --//--
+    expr = re.sub(r'([ +\-*/^%><=,(][\d]+)\(', r'\g<1>*(', expr)  # 2(...) changes to 2*(...) # TODO log10()
+    expr = re.sub(r'(^[\d.]+)\(', r'\g<1>*(', expr)  # 2(...) changes to 2*(...) # TODO log10()
+    # expr = re.sub(r'\)([\d])', r')*\g<1>', expr)  # (...)2 changes to (...)*2
+    expr = re.sub(r',\s*\)', r')', expr)  # (a,b, ) => (a,b)
+    # expr = re.sub(r'\)\(', r')*(', expr)  # (a,b,) => (a,b)
+    # expr = re.sub(r'(\d)([a-ik-zA-IK-Z_])', r'\g<1>*\g<2>', expr)  # 2pi changes to 2*pi, except 2j TODO: 2jconst
     return expr
 
 
@@ -71,43 +72,50 @@ def _import_modules(modules):
             try:
                 globals()[module] = __import__(module)  # TODO importlib.import_module()
             except ModuleNotFoundError:
-                _perror("ERROR:\t Module not found:" + module)
+                _error("ERROR:\t Module not found:" + module)
 
 
 def _tokenize_expr(expr, tokens):
     token_expr = deque()
     while expr:
         for (t, (t_re, _, _)) in tokens.items():
-            t_match = t_re.match(expr)
+            if t_re:
+                t_match = t_re.match(expr)
             if t_match:
                 token_expr.append((t, t_match.group()))
                 expr = expr[t_match.end():]
                 break
         else:
-            _perror("ERROR: EXPRESSION Tokenize Error")
+            _error("ERROR: EXPRESSION Tokenize Error")
     return [_t_nt(i, t, v) for i, (t, v) in enumerate(token_expr)]
 
 
-def _check_parentheses(token_expr):
-    parent_level = 0
-    func_levels = deque()
-    for (_, t, _) in token_expr:
-        if t == 'LPARENT':
-            parent_level += 1
-        if t == 'FUNC':
-            parent_level += 1
-            func_levels.append(parent_level)
-        if t == 'COMMA' and ((not func_levels) or (func_levels and parent_level != func_levels[-1])):
-            _perror("ERROR: Comma not in function parentheses")
-        if t == 'RPARENT':
-            if func_levels and func_levels[-1] == parent_level:
-                func_levels.pop()
-            parent_level -= 1
-            if parent_level < 0:
-                _perror("ERROR: Parentheses balance error")
-    if parent_level > 0:
-        _perror("ERROR: Parentheses balance error")
-    return token_expr
+# def _check_parentheses(token_expr):
+#     parent_level = 0
+#     func_levels = deque()
+#     for (_, t, _) in token_expr:
+#         if t == 'LPARENT':
+#             parent_level += 1
+#         if t == 'FUNC':
+#             parent_level += 1
+#             func_levels.append(parent_level)
+#         if t == 'COMMA' and ((not func_levels) or (func_levels and parent_level != func_levels[-1])):
+#             _perror("ERROR: Comma not in function parentheses")
+#         if t == 'RPARENT':
+#             if func_levels and func_levels[-1] == parent_level:
+#                 func_levels.pop()
+#             parent_level -= 1
+#             if parent_level < 0:
+#                 _perror("ERROR: Parentheses balance error")
+#     if parent_level > 0:
+#         _perror("ERROR: Parentheses balance error")
+#     return token_expr
+
+def _unary_fix(token_expr):
+    for token in token_expr:
+        if token.type == 'MINUS' and (token.index == 0 or token_expr[token.index - 1].type in {'LPARENT', 'COMMA', 'UMINUS', 'MINUS'}):
+            token_expr[token.index] = _t_nt(token.index, 'UMINUS', token.value)
+
 
 
 def _postfix_queue(token_expr, tokens):
@@ -117,6 +125,8 @@ def _postfix_queue(token_expr, tokens):
     for token in token_expr:
         if token.type in ('FLOAT', 'INTEGER', 'CONST', 'COMPLEX'):
             queue.append(token)
+        elif token.type == 'SPACE':
+            pass
         elif token.type == 'FUNC':
             stack.append(token)
             if token_expr[token.index + 1].type == 'FRPARENT':
@@ -156,31 +166,39 @@ def _postfix_queue(token_expr, tokens):
 
 def _rpn_calc(queue, tokens):
     rpn_stack = deque()
-    for element in queue:
-        if element.type in ('FLOAT', 'INTEGER', 'COMPLEX', 'CONST', 'COMMA', 'ARGS'):
-            rpn_stack.append(tokens[element.type].operator(element.value))
-        elif element.type == 'FUNC':
-            func_args = deque()
-            if rpn_stack.pop():
-                func_args.append(rpn_stack.pop())
-            while rpn_stack and rpn_stack[-1] == ',':
-                rpn_stack.pop()
-                func_args.append(rpn_stack.pop())
-            func_args.reverse()
-            try:
-                rpn_stack.append(tokens[element.type].operator(element.value[:-1])(*func_args))
-            except:  # pylint: disable=bare-except
-                _perror("ERROR: Function error")
-        else:
-            try:
-                operand_2, operand_1 = rpn_stack.pop(), rpn_stack.pop()
-                rpn_stack.append(tokens[element.type].operator(operand_1, operand_2))
-            except ZeroDivisionError:
-                _perror("ERROR: division by zero")
-            except:  # pylint: disable=bare-except
-                _perror("ERROR: Computation error")
-    return rpn_stack.pop()
-
+    if queue:
+        for element in queue:
+            if element.type in ('FLOAT', 'INTEGER', 'COMPLEX', 'CONST', 'COMMA', 'ARGS'):
+                rpn_stack.append(tokens[element.type].operator(element.value))
+            elif element.type == 'FUNC':
+                func_args = deque()
+                if rpn_stack.pop():
+                    func_args.append(rpn_stack.pop())
+                while rpn_stack and rpn_stack[-1] == ',':
+                    rpn_stack.pop()
+                    func_args.append(rpn_stack.pop())
+                func_args.reverse()
+                try:
+                    rpn_stack.append(tokens[element.type].operator(element.value[:-1])(*func_args))
+                except:  # pylint: disable=bare-except
+                    _error("ERROR: Function error")
+            elif element.type == 'UMINUS':
+                try:
+                    operand = rpn_stack.pop()
+                    rpn_stack.append(tokens[element.type].operator(operand))
+                except:  # pylint: disable=bare-except
+                    _error("ERROR: Computation error")
+            else:
+                try:
+                    operand_2, operand_1 = rpn_stack.pop(), rpn_stack.pop()
+                    rpn_stack.append(tokens[element.type].operator(operand_1, operand_2))
+                except ZeroDivisionError:
+                    _error("ERROR: division by zero")
+                except:  # pylint: disable=bare-except
+                    _error("ERROR: Computation error")
+        return rpn_stack.pop()
+    else:
+        _error("ERROR: Empty EXPRESSION")
 
 def calc(expr, modules='', verbose=False):
     """
@@ -213,7 +231,9 @@ def calc(expr, modules='', verbose=False):
         ('GE', _token(re.compile(r'>='), operator.ge, 3)),
         ('GT', _token(re.compile(r'>'), operator.gt, 3)),
         ('NE', _token(re.compile(r'!='), operator.ne, 2)),
-        ('ARGS', _token(re.compile(r'\\'), bool, 1)),
+        ('SPACE',_token(re.compile(r' '), None, None)),
+        ('ARGS', _token(None, bool, 1)),
+        ('UMINUS',_token(None, lambda x:x*-1, 5.5)) # TODO 5.5 change to 6
     ])
 
     expr = _modify_expr(expr)
@@ -221,13 +241,17 @@ def calc(expr, modules='', verbose=False):
         print("EXPR:\t", expr)
     _import_modules(modules)
     _token_expr = _tokenize_expr(expr, _tokens)
-    _token_expr = _check_parentheses(_token_expr)
+    # _token_expr = _check_parentheses(_token_expr)
     if verbose:
         print('TOKENS:\t', ' '.join(str(v) for i, t, v in _token_expr))
+    _unary_fix(_token_expr)
     _queue = _postfix_queue(_token_expr, _tokens)
     if verbose:
-        print('RPN:\t', ' '.join(str(v) for i, t, v in _queue))
-    return _rpn_calc(_queue, _tokens)
+        print('RPN:\t', ' '.join(str(v)+t for i, t, v in _queue))
+    result = _rpn_calc(_queue, _tokens)
+    if verbose:
+        print('RESULT:\t', result)
+    return result
 
 
 def _main():
