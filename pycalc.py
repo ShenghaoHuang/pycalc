@@ -11,22 +11,9 @@ import re
 from collections import deque, namedtuple, OrderedDict
 from string import ascii_letters as _letters, digits as _digits
 
-_t_nt = namedtuple('token', 'index, type, value')
-# class _elem(namedtuple('token', 'index, type, value')):
-#     def
-
 def _error(error_msg):
     print("ERROR:", error_msg, file=sys.stderr)
     sys.exit(1)  # TODO calc() return None?
-
-def _parse_args():
-    parser = argparse.ArgumentParser("pycalc", description='Pure-python command-line calculator',
-                                     usage='%(prog)s EXPRESSION [-h] [-v] [-m [MODULE [MODULE ...]]]')
-    parser.add_argument('-m', '--use-modules', type=str, help='additional modules to use', nargs='*', metavar='MODULE')
-    parser.add_argument('EXPRESSION', help='expression string to evaluate')
-    parser.add_argument('-v', '--verbose', action='store_true', help='print verbose information')
-    args = parser.parse_args()
-    return args.EXPRESSION, args.use_modules, args.verbose
 
 def _find_attr(attr_name):
     if '.' not in attr_name:
@@ -50,6 +37,53 @@ def _find_attr(attr_name):
             _error("Can't find function or constant")
         return attr
     _error("Can't find function or constant")
+
+tkn = namedtuple('Token', 're, operator, precedence')
+TOKENS = OrderedDict([
+    ('FLOAT', tkn(re.compile(r'\d*\.\d+'), float, 8)),
+    ('COMPLEX', tkn(re.compile(r'\d+[jJ]'), complex, 8)),
+    ('INTEGER', tkn(re.compile(r'\d+'), int, 8)),
+    ('LPARENT', tkn(re.compile(r'\('), str, 0)),
+    ('RPARENT', tkn(re.compile(r'\)'), str, 0)),
+    ('PLUS', tkn(re.compile(r'\+'), operator.add, 4)),
+    ('MINUS', tkn(re.compile(r'-'), operator.sub, 4)),
+    ('POWER', tkn(re.compile(r'(\^)|(\*\*)'), operator.pow, 6)),
+    ('TIMES', tkn(re.compile(r'\*'), operator.mul, 5)),
+    ('FDIVIDE', tkn(re.compile(r'//'), operator.floordiv, 5)),
+    ('DIVIDE', tkn(re.compile(r'/'), operator.truediv, 5)),
+    ('FUNC', tkn(re.compile(r'[a-zA-Z_][a-zA-Z0-9_.]*\('), _find_attr, 1)),  # TODO : add func.() exception
+    ('CONST', tkn(re.compile(r'[a-zA-Z_][a-zA-Z0-9_.]*'), _find_attr, 8)),  # TODO : same
+    ('COMMA', tkn(re.compile(r','), str, 7)),
+    ('MODULO', tkn(re.compile(r'%'), operator.mod, 5)),
+    ('EQUALS', tkn(re.compile(r'=='), operator.eq, 2)),
+    ('LE', tkn(re.compile(r'<='), operator.le, 3)),
+    ('LT', tkn(re.compile(r'<'), operator.lt, 3)),
+    ('GE', tkn(re.compile(r'>='), operator.ge, 3)),
+    ('GT', tkn(re.compile(r'>'), operator.gt, 3)),
+    ('NE', tkn(re.compile(r'!='), operator.ne, 2)),
+    ('SPACE', tkn(re.compile(r'\s+'), None, None)),
+    ('ARGS', tkn(None, bool, 1)),
+    ('UMINUS', tkn(None, lambda x: x * -1, 5.5)),
+    ('UPLUS', tkn(None, lambda x: x, 5.5)),  # TODO 5.5 change to 6
+])
+
+class _t_nt(namedtuple('token', 'index, type, value')):
+    @property
+    def precedence(self):
+        return TOKENS[self.type].precedence
+
+    @property
+    def operator(self):
+        return TOKENS[self.type].operator
+
+def _parse_args():
+    parser = argparse.ArgumentParser("pycalc", description='Pure-python command-line calculator',
+                                     usage='%(prog)s EXPRESSION [-h] [-v] [-m [MODULE [MODULE ...]]]')
+    parser.add_argument('-m', '--use-modules', type=str, help='additional modules to use', nargs='*', metavar='MODULE')
+    parser.add_argument('EXPRESSION', help='expression string to evaluate')
+    parser.add_argument('-v', '--verbose', action='store_true', help='print verbose information')
+    args = parser.parse_args()
+    return args.EXPRESSION, args.use_modules, args.verbose
 
 def _modify_expr(expr):
     expr = re.sub(r'[^{}]'.format(_letters + _digits + r' +\-*/^%><=,.!_()'), '', expr)  # filter
@@ -189,34 +223,7 @@ def calc(expr, modules='', verbose=False):
     :param verbose: Print verbose information
     :return: Result of calculation
     """
-    tkn = namedtuple('Token', 're, operator, precedence')
-    TOKENS = OrderedDict([
-        ('FLOAT', tkn(re.compile(r'\d*\.\d+'), float, 8)),
-        ('COMPLEX', tkn(re.compile(r'\d+[jJ]'), complex, 8)),
-        ('INTEGER', tkn(re.compile(r'\d+'), int, 8)),
-        ('LPARENT', tkn(re.compile(r'\('), str, 0)),
-        ('RPARENT', tkn(re.compile(r'\)'), str, 0)),
-        ('PLUS', tkn(re.compile(r'\+'), operator.add, 4)),
-        ('MINUS', tkn(re.compile(r'-'), operator.sub, 4)),
-        ('POWER', tkn(re.compile(r'(\^)|(\*\*)'), operator.pow, 6)),
-        ('TIMES', tkn(re.compile(r'\*'), operator.mul, 5)),
-        ('FDIVIDE', tkn(re.compile(r'//'), operator.floordiv, 5)),
-        ('DIVIDE', tkn(re.compile(r'/'), operator.truediv, 5)),
-        ('FUNC', tkn(re.compile(r'[a-zA-Z_][a-zA-Z0-9_.]*\('), _find_attr, 1)),  # TODO : add func.() exception
-        ('CONST', tkn(re.compile(r'[a-zA-Z_][a-zA-Z0-9_.]*'), _find_attr, 8)),  # TODO : same
-        ('COMMA', tkn(re.compile(r','), str, 7)),
-        ('MODULO', tkn(re.compile(r'%'), operator.mod, 5)),
-        ('EQUALS', tkn(re.compile(r'=='), operator.eq, 2)),
-        ('LE', tkn(re.compile(r'<='), operator.le, 3)),
-        ('LT', tkn(re.compile(r'<'), operator.lt, 3)),
-        ('GE', tkn(re.compile(r'>='), operator.ge, 3)),
-        ('GT', tkn(re.compile(r'>'), operator.gt, 3)),
-        ('NE', tkn(re.compile(r'!='), operator.ne, 2)),
-        ('SPACE', tkn(re.compile(r'\s+'), None, None)),
-        ('ARGS', tkn(None, bool, 1)),
-        ('UMINUS', tkn(None, lambda x: x * -1, 5.5)),
-        ('UPLUS', tkn(None, lambda x: x, 5.5)),  # TODO 5.5 change to 6
-    ])
+
 
     expr = _modify_expr(expr)
     if verbose: print("EXPR:\t", expr)
