@@ -11,11 +11,9 @@ import re
 from collections import deque, namedtuple, OrderedDict
 from string import ascii_letters as _letters, digits as _digits
 
-
 def _error(error_msg):
     print("ERROR:", error_msg, file=sys.stderr)
     sys.exit(1)  # TODO calc() return None?
-
 
 def _find_attr(attr_name):
     if '.' not in attr_name:
@@ -39,7 +37,6 @@ def _find_attr(attr_name):
             _error("Can't find function or constant")
         return attr
     _error("Can't find function or constant")
-
 
 tkn = namedtuple('Token', 're, operator, precedence')
 TOKENS = OrderedDict([
@@ -70,8 +67,7 @@ TOKENS = OrderedDict([
     ('UPLUS', tkn(None, lambda x: x, 5.5)),  # TODO 5.5 change to 6
 ])
 
-
-class _Token(namedtuple('token', 'index, type, value')):
+class _t_nt(namedtuple('token', 'index, type, value')):
     @property
     def precedence(self):
         return TOKENS[self.type].precedence
@@ -79,7 +75,6 @@ class _Token(namedtuple('token', 'index, type, value')):
     @property
     def operator(self):
         return TOKENS[self.type].operator
-
 
 def _parse_args():
     parser = argparse.ArgumentParser("pycalc", description='Pure-python command-line calculator',
@@ -90,16 +85,14 @@ def _parse_args():
     args = parser.parse_args()
     return args.EXPRESSION, args.use_modules, args.verbose
 
-
 def _modify_expr(expr):
     expr = re.sub(r'[^{}]'.format(_letters + _digits + r' +\-*/^%><=,.!_()'), '', expr)  # filter
     expr = re.sub(r'([ +\-*/^%><=,(][\d]+)\(', r'\g<1>*(', expr)  # 2(...) changes to 2*(...)
     expr = re.sub(r'(^[\d.]+)\(', r'\g<1>*(', expr)  # 2(...) changes to 2*(...)
     expr = re.sub(r',\s*\)', r')', expr)  # (a,b, ) => (a,b)
-    expr = re.sub(r'\)\(', r')*(', expr)
-    # expr = re.sub(r'(\d)([a-ik-zA-IK-Z_])', r'\g<1>*\g<2>', expr)  # 2pi changes to 2*pi, except 2j TODO: 2jconst
+    expr = re.sub(r'\)\(', r')*(', expr)  # (a,b,) => (a,b)
+    expr = re.sub(r'(\d)([a-ik-zA-IK-Z_])', r'\g<1>*\g<2>', expr)  # 2pi changes to 2*pi, except 2j TODO: 2jconst
     return expr
-
 
 def _import_modules(modules):
     if modules:
@@ -109,7 +102,6 @@ def _import_modules(modules):
                 globals()[module] = __import__(module)  # TODO importlib.import_module()
             except ModuleNotFoundError:
                 _error("ERROR:\t Module not found:" + module)
-
 
 def _tokenize_expr(expr, tokens):
     token_expr = deque()
@@ -124,15 +116,15 @@ def _tokenize_expr(expr, tokens):
                     break
         else:
             _error("EXPRESSION Tokenize Error")
-    return [_Token(i, t, v) for i, (t, v) in enumerate(token_expr)]
-
+    return [_t_nt(i, t, v) for i, (t, v) in enumerate(token_expr)]
 
 def _unary_replace(token_expr):
     for token in token_expr:
         not_unary_after = {'FLOAT', 'INTEGER', 'CONST', 'COMPLEX', 'RPARENT'}
-        if (token.type in {'MINUS', 'PLUS'} and (token.index == 0 or token_expr[token.index - 1].type not in not_unary_after)):
-            token_expr[token.index] = _Token(token.index, 'U' + token.type, token.value)
-
+        if (token.type == 'MINUS' and (token.index == 0 or token_expr[token.index - 1].type not in not_unary_after)):
+            token_expr[token.index] = _t_nt(token.index, 'UMINUS', token.value)
+        if (token.type == 'PLUS' and (token.index == 0 or token_expr[token.index - 1].type not in not_unary_after)):
+            token_expr[token.index] = _t_nt(token.index, 'UPLUS', token.value)
 
 def _postfix_queue(token_expr, tokens):
     stack = deque()
@@ -160,7 +152,7 @@ def _postfix_queue(token_expr, tokens):
                 if not stack:
                     _error("Parentheses error")
             if stack[-1].type == 'FUNC':
-                queue.append(_Token('', 'ARGS', have_args.pop()))
+                queue.append(_t_nt('', 'ARGS', have_args.pop()))
                 queue.append(stack.pop())
             else:
                 stack.pop()
@@ -168,11 +160,11 @@ def _postfix_queue(token_expr, tokens):
             # From Python docs: The power operator binds more tightly than unary operators on its left;
             # it binds less tightly than unary operators on its right.
             stack.append(token)
-        elif token.precedence == stack[-1].precedence and token.type in {'POWER', 'UMINUS', 'UPLUS'}:
+        elif tokens[token.type].precedence == tokens[stack[-1].type].precedence and token.type in {'POWER', 'UMINUS', 'UPLUS'}:
             stack.append(token)
-        elif token.precedence <= stack[-1].precedence:
+        elif tokens[token.type].precedence <= tokens[stack[-1].type].precedence:
             while stack:
-                if token.precedence <= stack[-1].precedence:
+                if tokens[token.type].precedence <= tokens[stack[-1].type].precedence:
                     queue.append(stack.pop())
                     continue
                 else:
@@ -184,13 +176,12 @@ def _postfix_queue(token_expr, tokens):
         queue.append(stack.pop())
     return queue
 
-
 def _rpn_calc(queue, tokens):
     rpn_stack = deque()
     if queue:
         for element in queue:
             if element.type in ('FLOAT', 'INTEGER', 'COMPLEX', 'CONST', 'COMMA', 'ARGS'):
-                rpn_stack.append(element.operator(element.value))
+                rpn_stack.append(tokens[element.type].operator(element.value))
             elif element.type == 'FUNC':
                 func_args = deque()
                 if rpn_stack.pop() is True:
@@ -200,19 +191,19 @@ def _rpn_calc(queue, tokens):
                     func_args.append(rpn_stack.pop())
                 func_args.reverse()
                 try:
-                    rpn_stack.append(element.operator(element.value[:-1])(*func_args))
+                    rpn_stack.append(tokens[element.type].operator(element.value[:-1])(*func_args))
                 except:  # pylint: disable=bare-except
                     _error("Function error")
             elif element.type in {'UMINUS', 'UPLUS'}:
                 try:
                     operand = rpn_stack.pop()
-                    rpn_stack.append(element.operator(operand))
+                    rpn_stack.append(tokens[element.type].operator(operand))
                 except:  # pylint: disable=bare-except
                     _error("Calculation error")
             else:
                 try:
                     operand_2, operand_1 = rpn_stack.pop(), rpn_stack.pop()
-                    rpn_stack.append(element.operator(operand_1, operand_2))
+                    rpn_stack.append(tokens[element.type].operator(operand_1, operand_2))
                 except ZeroDivisionError:
                     _error("division by zero")
                 except:  # pylint: disable=bare-except
@@ -224,7 +215,6 @@ def _rpn_calc(queue, tokens):
     else:
         _error("Empty EXPRESSION")
 
-
 def calc(expr, modules='', verbose=False):
     """
     Calculate expression.
@@ -233,6 +223,8 @@ def calc(expr, modules='', verbose=False):
     :param verbose: Print verbose information
     :return: Result of calculation
     """
+
+
     expr = _modify_expr(expr)
     if verbose: print("EXPR:\t", expr)
     _import_modules(modules)
@@ -245,6 +237,9 @@ def calc(expr, modules='', verbose=False):
     if verbose: print('RESULT:\t', result)
     return result
 
+def _main():
+    result = calc(*_parse_args())
+    print(result)
 
 if __name__ == '__main__':
-    print(calc(*_parse_args()))
+    _main()
