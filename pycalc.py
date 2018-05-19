@@ -14,7 +14,6 @@ from collections import deque, namedtuple, OrderedDict
 
 
 def _error(error_msg):
-    print("ERROR:", error_msg, file=sys.stderr)
     raise ArithmeticError(error_msg)
 
 
@@ -246,5 +245,6 @@ def calc(expr: str, modules=(), verbose: bool = False):
 if __name__ == '__main__':
     try:
         print(calc(*_parse_args()))
-    except ArithmeticError:
+    except ArithmeticError as error:
+        print("ERROR:", error, file=sys.stderr)
         sys.exit(1)
