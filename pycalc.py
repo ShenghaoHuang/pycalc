@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 Module for calculating mathematical expressions.
-Use shunting-yard and reverse polish notation algorithms.
+
+This module provide calc() function for evaluation mathematical expression
+using customized shunting-yard and reverse polish notation algorithms.
 """
 import argparse
 import operator
@@ -13,7 +15,7 @@ from collections import deque, namedtuple, OrderedDict
 
 def _error(error_msg):
     print("ERROR:", error_msg, file=sys.stderr)
-    raise ArithmeticError
+    raise ArithmeticError(error_msg)
 
 
 def _find_attr(attr_name):
@@ -27,7 +29,7 @@ def _find_attr(attr_name):
             return attr
     else:
         if attr_name[0] in modules:
-            attr = getattr(sys.modules[__name__], attr_name[0],None)
+            attr = getattr(sys.modules[__name__], attr_name[0], None)
             for part in attr_name[1:]:
                 attr = getattr(attr, part, None)
             if attr is not None:
@@ -35,44 +37,44 @@ def _find_attr(attr_name):
     _error("Unknown function or constant")
 
 
-tkn = namedtuple('Tkn', 're, operator, precedence')
-TOKENS = OrderedDict([
-    ('FLOAT', tkn(re.compile(r'\d*\.\d+'), float, 8)),
-    ('COMPLEX', tkn(re.compile(r'\d+[jJ]'), complex, 8)),
-    ('INTEGER', tkn(re.compile(r'\d+'), int, 8)),
-    ('LPARENT', tkn(re.compile(r'\('), str, 0)),
-    ('RPARENT', tkn(re.compile(r'\)'), str, 0)),
-    ('PLUS', tkn(re.compile(r'\+'), operator.add, 4)),
-    ('MINUS', tkn(re.compile(r'-'), operator.sub, 4)),
-    ('POWER', tkn(re.compile(r'(\^)|(\*\*)'), operator.pow, 6)),
-    ('TIMES', tkn(re.compile(r'\*'), operator.mul, 5)),
-    ('FDIVIDE', tkn(re.compile(r'//'), operator.floordiv, 5)),
-    ('DIVIDE', tkn(re.compile(r'/'), operator.truediv, 5)),
-    ('COMMA', tkn(re.compile(r','), str, 7)),
-    ('MODULO', tkn(re.compile(r'%'), operator.mod, 5)),
-    ('EQUALS', tkn(re.compile(r'=='), operator.eq, 2)),
-    ('LE', tkn(re.compile(r'<='), operator.le, 3)),
-    ('LT', tkn(re.compile(r'<'), operator.lt, 3)),
-    ('GE', tkn(re.compile(r'>='), operator.ge, 3)),
-    ('GT', tkn(re.compile(r'>'), operator.gt, 3)),
-    ('NE', tkn(re.compile(r'!='), operator.ne, 2)),
-    ('SPACE', tkn(re.compile(r'\s+'), None, None)),
-    ('FUNC', tkn(re.compile(r'[\w]+\('), _find_attr, 1)),  # TODO : add func.() exception
-    ('CONST', tkn(re.compile(r'[\w]+'), _find_attr, 8)),  # TODO : same
-    ('ARGS', tkn(None, bool, 1)),
-    ('UMINUS', tkn(None, lambda x: x * -1, 5.5)),
-    ('UPLUS', tkn(None, lambda x: x, 5.5)),  # TODO 5.5 change to 6
+_tkn = namedtuple('_tkn', 're, operator, precedence')
+_TOKENS = OrderedDict([
+    ('FLOAT', _tkn(re.compile(r'\d*\.\d+'), float, 8)),
+    ('COMPLEX', _tkn(re.compile(r'\d+[jJ]'), complex, 8)),
+    ('INTEGER', _tkn(re.compile(r'\d+'), int, 8)),
+    ('LPARENT', _tkn(re.compile(r'\('), str, 0)),
+    ('RPARENT', _tkn(re.compile(r'\)'), str, 0)),
+    ('PLUS', _tkn(re.compile(r'\+'), operator.add, 4)),
+    ('MINUS', _tkn(re.compile(r'-'), operator.sub, 4)),
+    ('POWER', _tkn(re.compile(r'(\^)|(\*\*)'), operator.pow, 6)),
+    ('TIMES', _tkn(re.compile(r'\*'), operator.mul, 5)),
+    ('FDIVIDE', _tkn(re.compile(r'//'), operator.floordiv, 5)),
+    ('DIVIDE', _tkn(re.compile(r'/'), operator.truediv, 5)),
+    ('COMMA', _tkn(re.compile(r','), str, 7)),
+    ('MODULO', _tkn(re.compile(r'%'), operator.mod, 5)),
+    ('EQUALS', _tkn(re.compile(r'=='), operator.eq, 2)),
+    ('LE', _tkn(re.compile(r'<='), operator.le, 3)),
+    ('LT', _tkn(re.compile(r'<'), operator.lt, 3)),
+    ('GE', _tkn(re.compile(r'>='), operator.ge, 3)),
+    ('GT', _tkn(re.compile(r'>'), operator.gt, 3)),
+    ('NE', _tkn(re.compile(r'!='), operator.ne, 2)),
+    ('SPACE', _tkn(re.compile(r'\s+'), None, None)),
+    ('FUNC', _tkn(re.compile(r'[\w]+\('), _find_attr, 1)),  # TODO : add func.() exception
+    ('CONST', _tkn(re.compile(r'[\w]+'), _find_attr, 8)),  # TODO : same
+    ('ARGS', _tkn(None, bool, 1)),
+    ('UMINUS', _tkn(None, lambda x: x * -1, 5.5)),
+    ('UPLUS', _tkn(None, lambda x: x, 5.5)),  # TODO 5.5 change to 6
 ])
 
 
 class _Token(namedtuple('token', 'index, type, value')):
     @property
     def precedence(self):
-        return TOKENS[self.type].precedence
+        return _TOKENS[self.type].precedence
 
     @property
     def operator(self):
-        return TOKENS[self.type].operator
+        return _TOKENS[self.type].operator
 
 
 def _parse_args():
@@ -87,12 +89,10 @@ def _parse_args():
 
 
 def _modify_expr(expr):
-    expr = re.sub(r'([ +\-*/^%><=,(][\d]+)\(', r'\g<1>*(', expr)  # 2(...) changes to 2*(...)
+    expr = re.sub(r'[^{}]'.format(r'\w +\-*/^%><=,.!_()'), '', expr)  # filter unsupported characters
+    expr = re.sub(r'([ +\-*/^%><=,(][\d]+)\(', r'\g<1>*(', expr)  # ...2(...) changes to ...2*(...)
     expr = re.sub(r'(^[\d.]+)\(', r'\g<1>*(', expr)  # 2(...) changes to 2*(...)
     expr = re.sub(r',\s*\)', r')', expr)  # (a,b, ) => (a,b)
-    # expr = re.sub(r'[^{}]'.format(_letters + _digits + r' +\-*/^%><=,.!_()'), '', expr)  # filter
-    # expr = re.sub(r'\)\(', r')*(', expr)
-    # expr = re.sub(r'(\d)([a-ik-zA-IK-Z_])', r'\g<1>*\g<2>', expr)  # 2pi changes to 2*pi, except 2j TODO: 2juices
     return expr
 
 
@@ -104,10 +104,10 @@ def _import_modules():
             _error("Module not found:" + module)
 
 
-def _tokenize_expr(expr, tokens):
+def _tokenize_expr(expr):
     token_expr = deque()
     while expr:
-        for (_type, (_re, _, _)) in tokens.items():
+        for (_type, (_re, _, _)) in _TOKENS.items():
             if _re is not None:
                 t_match = _re.match(expr)
                 if t_match:
@@ -123,19 +123,18 @@ def _tokenize_expr(expr, tokens):
 def _unary_replace(token_expr):
     for token in token_expr:
         not_unary_after = {'FLOAT', 'INTEGER', 'CONST', 'COMPLEX', 'RPARENT'}
-        if (token.type in {'MINUS', 'PLUS'} and (token.index == 0 or token_expr[token.index - 1].type not in not_unary_after)):
+        if (token.type in {'MINUS', 'PLUS'}
+                and (token.index == 0 or token_expr[token.index - 1].type not in not_unary_after)):
             token_expr[token.index] = _Token(token.index, 'U' + token.type, token.value)
 
 
-def _postfix_queue(token_expr, tokens):
+def _postfix_queue(token_expr):
     stack = deque()
     queue = deque()
     have_args = deque()
     for token in token_expr:
         if token.type in {'FLOAT', 'INTEGER', 'CONST', 'COMPLEX'}:
             queue.append(token)
-        elif token.type == 'SPACE':
-            continue
         elif token.type == 'FUNC':
             stack.append(token)
             have_args.append(False if token_expr[token.index + 1].type == 'RPARENT' else True)
@@ -162,6 +161,7 @@ def _postfix_queue(token_expr, tokens):
             # it binds less tightly than unary operators on its right.
             stack.append(token)
         elif token.precedence == stack[-1].precedence and token.type in {'POWER', 'UMINUS', 'UPLUS'}:
+            # Right-to-Left association operations
             stack.append(token)
         elif token.precedence <= stack[-1].precedence:
             while stack:
@@ -192,10 +192,7 @@ def _rpn_calc(queue):
                     rpn_stack.pop()
                     func_args.append(rpn_stack.pop())
                 func_args.reverse()
-                try:
-                    rpn_stack.append(element.operator(element.value[:-1])(*func_args))
-                except:  # pylint: disable=bare-except TODO
-                    _error("Function error")
+                rpn_stack.append(element.operator(element.value[:-1])(*func_args))
             elif element.type in {'UMINUS', 'UPLUS'}:
                 try:
                     operand = rpn_stack.pop()
@@ -218,26 +215,31 @@ def _rpn_calc(queue):
         _error("Empty EXPRESSION")
 
 
-def calc(expr, modules='', verbose=False):
+def calc(expr: str, modules=(), verbose: bool = False):
     """
-    Calculate expression.
+    Calculate expression like python, with builtins and math module functions and constants.
+    Support import of third-party functions and constants from modules
+
     :param expr: EXPRESSION for calculation
+    :type expr: str
     :param modules: Additional modules
+    :type modules: list[str]
     :param verbose: Print verbose information
+    :type verbose: bool
     :return: Result of calculation
     """
     global _modules
     _modules = modules
     expr = _modify_expr(expr)
     _import_modules()
-    _token_expr = _tokenize_expr(expr, TOKENS)
+    _token_expr = _tokenize_expr(expr)
     _unary_replace(_token_expr)
-    _queue = _postfix_queue(_token_expr, TOKENS)
+    _queue = _postfix_queue(_token_expr)
     _result = _rpn_calc(_queue)
     if verbose:
         print("EXPR:\t", expr)
-        print('TOKENS:\t', '  '.join(str(v)+':'+t for i, t, v in _token_expr))
-        print('RPN:\t', '  '.join(str(v)+':'+t for i, t, v in _queue))
+        print('TOKENS:\t', '  '.join(str(v) + ':' + t for i, t, v in _token_expr))
+        print('RPN:\t', '  '.join(str(v) + ':' + t for i, t, v in _queue))
     return _result
 
 

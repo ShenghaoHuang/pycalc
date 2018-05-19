@@ -12,7 +12,9 @@ tests = (
     "-2**2",
     "(2+3)*4",
     "-(1)",
-    ".3pi",
+    # ".3pi",
+    "-5**-1",
+    "-5**-(1)-1",
     "pi*(-1)",
     "-pi",
     "1*4+3.3/(3 + .3)*3(sqrt(4))/(sin(0) + 1)",
@@ -91,8 +93,8 @@ tests = (
 for expr in tests:
     expr = re.sub(r'([ +\-*/^%><=,(][\d]+)\(', r'\g<1>*(', expr)  # 2(...) changes to 2*(...)
     expr = re.sub(r'(^[\d.]+)\(', r'\g<1>*(', expr)  # 2(...) changes to 2*(...)
-    expr = re.sub(r'(\d)([a-ik-zA-IK-Z_])', r'\g<1>*\g<2>', expr)  # 2pi changes to 2*pi, except 2j
-    expr = re.sub(r'\^', r'**', expr)  # 2pi changes to 2*pi, except 2j
+    # expr = re.sub(r'(\d)([a-ik-zA-IK-Z_])', r'\g<1>*\g<2>', expr)  # 2pi changes to 2*pi, except 2j
+    expr = re.sub(r'\^', r'**', expr)
     calc_result=''
     try:
         calc_result = pycalc.calc(expr, [], verbose=False)
