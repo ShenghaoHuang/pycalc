@@ -196,7 +196,7 @@ def _rpn_calc(queue):
                 try:
                     operand = rpn_stack.pop()
                     rpn_stack.append(element.operator(operand))
-                except:  # pylint: disable=bare-except TODO
+                except Exception:
                     _error("Calculation error")
             else:
                 try:
@@ -204,7 +204,7 @@ def _rpn_calc(queue):
                     rpn_stack.append(element.operator(operand_1, operand_2))
                 except ZeroDivisionError:
                     _error("Division by zero")
-                except:  # pylint: disable=bare-except TODO
+                except Exception:
                     _error("Calculation error")
         result = rpn_stack.pop()
         if rpn_stack:
