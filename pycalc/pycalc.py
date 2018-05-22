@@ -18,38 +18,37 @@ def _error(error_msg):
 
 
 def _find_attr(attr_name):
-    modules = [*_modules, 'math', 'builtins']
     attr_name = attr_name.split('.')
     if len(attr_name) == 1:
-        for module in modules:
+        for module in _modules:
             attr = getattr(sys.modules[module], attr_name[0], None)
             if attr is None:
                 continue
             return attr
     else:
-        if attr_name[0] in modules:
+        if attr_name[0] in _modules:
             attr = getattr(sys.modules[__name__], attr_name[0], None)
             for part in attr_name[1:]:
                 attr = getattr(attr, part, None)
             if attr is not None:
                 return attr
-    _error("Unknown function or constant")
+    _error("Unknown function or constant:" + str(attr_name))
 
 
 _tkn = namedtuple('_tkn', 're, operator, precedence')
 _TOKENS = OrderedDict([
-    ('FLOAT', _tkn(re.compile(r'\d*\.\d+'), float, 8)),
-    ('COMPLEX', _tkn(re.compile(r'\d+[jJ]'), complex, 8)),
-    ('INTEGER', _tkn(re.compile(r'\d+'), int, 8)),
+    ('FLOAT', _tkn(re.compile(r'\d*\.\d+'), float, 9)),
+    ('COMPLEX', _tkn(re.compile(r'\d+[jJ](?![\w\d])'), complex, 9)),
+    ('INTEGER', _tkn(re.compile(r'\d+'), int, 9)),
     ('LPARENT', _tkn(re.compile(r'\('), str, 0)),
     ('RPARENT', _tkn(re.compile(r'\)'), str, 0)),
     ('PLUS', _tkn(re.compile(r'\+'), operator.add, 4)),
     ('MINUS', _tkn(re.compile(r'-'), operator.sub, 4)),
-    ('POWER', _tkn(re.compile(r'(\^)|(\*\*)'), operator.pow, 6)),
+    ('POWER', _tkn(re.compile(r'(\^)|(\*\*)'), operator.pow, 7)),
     ('TIMES', _tkn(re.compile(r'\*'), operator.mul, 5)),
     ('FDIVIDE', _tkn(re.compile(r'//'), operator.floordiv, 5)),
     ('DIVIDE', _tkn(re.compile(r'/'), operator.truediv, 5)),
-    ('COMMA', _tkn(re.compile(r','), str, 7)),
+    ('COMMA', _tkn(re.compile(r','), str, 8)),
     ('MODULO', _tkn(re.compile(r'%'), operator.mod, 5)),
     ('EQUALS', _tkn(re.compile(r'=='), operator.eq, 2)),
     ('LE', _tkn(re.compile(r'<='), operator.le, 3)),
@@ -58,11 +57,11 @@ _TOKENS = OrderedDict([
     ('GT', _tkn(re.compile(r'>'), operator.gt, 3)),
     ('NE', _tkn(re.compile(r'!='), operator.ne, 2)),
     ('SPACE', _tkn(re.compile(r'\s+'), None, None)),
-    ('FUNC', _tkn(re.compile(r'[\w]+\('), _find_attr, 1)),  # TODO : add func.() exception
-    ('CONST', _tkn(re.compile(r'[\w]+'), _find_attr, 8)),  # TODO : same
+    ('FUNC', _tkn(re.compile(r'[\w]+\('), _find_attr, 1)),
+    ('CONST', _tkn(re.compile(r'[\w]+'), _find_attr, 9)),
     ('ARGS', _tkn(None, bool, 1)),
-    ('UMINUS', _tkn(None, lambda x: x * -1, 5.5)),
-    ('UPLUS', _tkn(None, lambda x: x, 5.5)),  # TODO 5.5 change to 6
+    ('UMINUS', _tkn(None, lambda x: x * -1, 6)),
+    ('UPLUS', _tkn(None, lambda x: x, 6)),
 ])
 
 
@@ -98,7 +97,7 @@ def _modify_expr(expr):
 def _import_modules():
     for module in _modules:
         try:
-            globals()[module] = __import__(module)  # TODO importlib.import_module()
+            globals()[module] = __import__(module)
         except ModuleNotFoundError:
             _error("Module not found:" + module)
 
@@ -122,8 +121,8 @@ def _tokenize_expr(expr):
 def _unary_replace(token_expr):
     for token in token_expr:
         not_unary_after = {'FLOAT', 'INTEGER', 'CONST', 'COMPLEX', 'RPARENT'}
-        if (token.type in {'MINUS', 'PLUS'}
-                and (token.index == 0 or token_expr[token.index - 1].type not in not_unary_after)):
+        if (token.type in {'MINUS', 'PLUS'} and
+                (token.index == 0 or token_expr[token.index - 1].type not in not_unary_after)):
             token_expr[token.index] = _Token(token.index, 'U' + token.type, token.value)
 
 
@@ -136,6 +135,7 @@ def _postfix_queue(token_expr):
             queue.append(token)
         elif token.type == 'FUNC':
             stack.append(token)
+            # If function have no arguments "func()" we append False before FUNC
             have_args.append(False if token_expr[token.index + 1].type == 'RPARENT' else True)
         elif not stack:
             stack.append(token)
@@ -186,6 +186,7 @@ def _rpn_calc(queue):
             elif element.type == 'FUNC':
                 func_args = deque()
                 if rpn_stack.pop() is True:
+                    # function have arguments and we will continue to pop them until comma left on stack
                     func_args.append(rpn_stack.pop())
                 while rpn_stack and rpn_stack[-1] == ',':
                     rpn_stack.pop()
@@ -196,7 +197,7 @@ def _rpn_calc(queue):
                 try:
                     operand = rpn_stack.pop()
                     rpn_stack.append(element.operator(operand))
-                except Exception:
+                except IndexError:
                     _error("Calculation error")
             else:
                 try:
@@ -204,7 +205,7 @@ def _rpn_calc(queue):
                     rpn_stack.append(element.operator(operand_1, operand_2))
                 except ZeroDivisionError:
                     _error("Division by zero")
-                except Exception:
+                except IndexError:
                     _error("Calculation error")
         result = rpn_stack.pop()
         if rpn_stack:
@@ -227,24 +228,29 @@ def calc(expr: str, modules=(), verbose: bool = False):
     :type verbose: bool
     :return: Result of calculation
     """
+    # vprint will print out verbose information if verbose=True, otherwise just return None
+    vprint = print if verbose else lambda *args, **kwargs: None
     global _modules
-    _modules = modules
+    _modules = [*modules, 'math', 'builtins']
     expr = _modify_expr(expr)
+    vprint("EXPR:\t", expr)
     _import_modules()
     _token_expr = _tokenize_expr(expr)
     _unary_replace(_token_expr)
+    vprint('TOKENS:\t', '  '.join(str(v) + ':' + t for i, t, v in _token_expr))
     _queue = _postfix_queue(_token_expr)
+    vprint('RPN:\t', '  '.join(str(v) + ':' + t for i, t, v in _queue))
     _result = _rpn_calc(_queue)
-    if verbose:
-        print("EXPR:\t", expr)
-        print('TOKENS:\t', '  '.join(str(v) + ':' + t for i, t, v in _token_expr))
-        print('RPN:\t', '  '.join(str(v) + ':' + t for i, t, v in _queue))
     return _result
 
 
-if __name__ == '__main__':
+def main():
     try:
         print(calc(*_parse_args()))
     except ArithmeticError as error:
         print("ERROR:", error, file=sys.stderr)
         sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()

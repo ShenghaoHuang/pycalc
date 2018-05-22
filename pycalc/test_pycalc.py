@@ -1,5 +1,6 @@
 import unittest
-from pycalc import pycalc
+import pycalc
+import re
 
 
 class PycalcUnitTestCase(unittest.TestCase):
@@ -15,7 +16,7 @@ class PycalcUnitTestCase(unittest.TestCase):
 
     def test_import_find(self):
         import math
-        pycalc._modules = ["for_test"]
+        pycalc._modules = ["for_test", "math", "builtins"]
         pycalc._import_modules()
         self.assertEqual(pycalc._find_attr("math.sin")(math.pi / 2), math.sin(math.pi / 2))
         self.assertEqual(pycalc._find_attr("π"), 3.14)
@@ -42,7 +43,7 @@ class PycalcUnitTestCase(unittest.TestCase):
 
     def test_unary_replace(self):
         # tokenized_expr = pycalc._tokenize_expr("-1-2*(+3)**-4")
-        from pycalc.pycalc import _Token
+        from pycalc import _Token
         tokenized_expr = [_Token(index=0, type='MINUS', value='-'), _Token(index=1, type='INTEGER', value='1'),
                           _Token(index=2, type='MINUS', value='-'), _Token(index=3, type='INTEGER', value='2'),
                           _Token(index=4, type='TIMES', value='*'), _Token(index=5, type='LPARENT', value='('),
@@ -58,7 +59,7 @@ class PycalcUnitTestCase(unittest.TestCase):
     def test_postfix_queue(self):
         # tokenized_expr = pycalc._tokenize_expr("-1-2*(+3)**-4%(2*sin(pi/2))")
         # pycalc._unary_replace(tokenized_expr)
-        from pycalc.pycalc import _Token
+        from pycalc import _Token
         tokenized_expr = [_Token(index=0, type='UMINUS', value='-'), _Token(index=1, type='INTEGER', value='1'),
                           _Token(index=2, type='MINUS', value='-'), _Token(index=3, type='INTEGER', value='2'),
                           _Token(index=4, type='TIMES', value='*'), _Token(index=5, type='LPARENT', value='('),
@@ -83,7 +84,7 @@ class PycalcUnitTestCase(unittest.TestCase):
         # tokenized_expr = pycalc._tokenize_expr(expr)
         # pycalc._unary_replace(tokenized_expr)
         # postfix = pycalc._postfix_queue(tokenized_expr)
-        from pycalc.pycalc import _Token, deque
+        from pycalc import _Token, deque
         postfix = deque([_Token(index=0, type='INTEGER', value='1'), _Token(index=2, type='INTEGER', value='4'),
                          _Token(index=1, type='TIMES', value='*'), _Token(index=4, type='FLOAT', value='3.3'),
                          _Token(index=7, type='INTEGER', value='3'), _Token(index=9, type='FLOAT', value='.3'),
@@ -159,7 +160,7 @@ class PycalcUnitTestCase(unittest.TestCase):
             "sin(pi/2**1) + log(1*4+2**2+1, 3**2)",
             "10*e**0*log10(.4* -5/ -0.1-10) - -abs(-53/10) + -5",
             "sin(-cos(-sin(3.0)-cos(-sin(-3.0*5.0)-sin(cos(log10(43.0))))"
-                "+cos(sin(sin(34.0-2.0**2.0))))--cos(1.0)--cos(0.0)**3.0)",
+            "+cos(sin(sin(34.0-2.0**2.0))))--cos(1.0)--cos(0.0)**3.0)",
             "2.0**(2.0**2.0*2.0**2.0)",
             "sin(e**log(e**e**sin(23.0),45.0) + cos(3.0+log10(e**-e)))",
         )
@@ -184,7 +185,8 @@ class PycalcUnitTestCase(unittest.TestCase):
             "(((((",
             "3/0.0"
         )
-        import re
+
+        from math import pi, sqrt, sin, log10, e, log, cos
 
         for expr in tests:
             expr = re.sub(r'([ +\-*/^%><=,(][\d]+)\(', r'\g<1>*(', expr)  # ...2(...) changes to ...2*(...)
