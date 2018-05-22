@@ -3,7 +3,7 @@
 Calculate expression like python, with builtins and math module functions and constants.
 Support import of third-party functions and constants from modules
 
-# Python Programming Language Foundation Hometask
+## Python Programming Language Foundation Hometask
 You are proposed to implement pure-python command-line calculator
 using **python 3.6**.
 
