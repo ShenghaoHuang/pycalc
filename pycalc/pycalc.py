@@ -83,7 +83,7 @@ def _parse_args():
     parser.add_argument('EXPRESSION', help='expression string to evaluate')
     parser.add_argument('-v', '--verbose', action='store_true', help='print verbose information')
     args = parser.parse_args()
-    return args.EXPRESSION, args.use_modules, args.verbose
+    return str(args.EXPRESSION), args.use_modules, args.verbose
 
 
 def _modify_expr(expr):

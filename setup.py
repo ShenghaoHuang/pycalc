@@ -24,6 +24,6 @@ setuptools.setup(
     ),
     entry_points={
         'console_scripts':
-            ['pycalc = pycalc.pycalc:main']
+            ['pycalc = pycalc.pycalc:_main']
         },
 )
