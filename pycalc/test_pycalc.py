@@ -16,6 +16,9 @@ class PycalcUnitTestCase(unittest.TestCase):
 
     def test_import_find(self):
         import math
+        with self.assertRaises(ArithmeticError):
+            pycalc._modules = ["unknown_module"]
+            pycalc._import_modules()
         pycalc._modules = ["for_test", "math", "builtins"]
         pycalc._import_modules()
         self.assertEqual(pycalc._find_attr("math.sin")(math.pi / 2), math.sin(math.pi / 2))

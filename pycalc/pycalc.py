@@ -87,7 +87,7 @@ def _parse_args():
 
 
 def _modify_expr(expr):
-    expr = re.sub(r'[^{}]'.format(r'\w +\-*/^%><=,.!_()'), '', expr)  # filter unsupported characters
+    expr = re.sub(r'[^\w +\-*/^%><=,.!_()]', '', expr)  # filter unsupported characters
     expr = re.sub(r'([ +\-*/^%><=,(][\d]+)\(', r'\g<1>*(', expr)  # ...2(...) changes to ...2*(...)
     expr = re.sub(r'(^[\d.]+)\(', r'\g<1>*(', expr)  # 2(...) changes to 2*(...)
     expr = re.sub(r',\s*\)', r')', expr)  # (a,b, ) => (a,b)
@@ -244,7 +244,7 @@ def calc(expr: str, modules=(), verbose: bool = False):
     return _result
 
 
-def main():
+def _main():
     try:
         print(calc(*_parse_args()))
     except ArithmeticError as error:
@@ -253,4 +253,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    _main()
