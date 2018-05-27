@@ -98,7 +98,7 @@ def _import_modules():
     for module in _modules:
         try:
             globals()[module] = __import__(module)
-        except (ModuleNotFoundError, ImportError):
+        except ImportError:
             _error("Module not found:" + module)
 
 
