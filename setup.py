@@ -5,9 +5,9 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="pycalc",
-    version="0.0.1",
+    version="0.0.2",
     author="Alexey Karpenko",
-    author_email="alexeyp750@gmail.com",
+    author_email="38530214+k-alexey@users.noreply.github.com",
     description="Pure-python command-line calculator",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -24,6 +24,6 @@ setuptools.setup(
     ),
     entry_points={
         'console_scripts':
-            ['pycalc = pycalc.pycalc:_main']
+            ['pycalc = pycalc:_main']
         },
 )

@@ -1,5 +1,5 @@
 import unittest
-from pycalc import pycalc
+import pycalc
 import re
 
 
@@ -46,7 +46,7 @@ class PycalcUnitTestCase(unittest.TestCase):
 
     def test_unary_replace(self):
         # tokenized_expr = pycalc._tokenize_expr("-1-2*(+3)**-4")
-        from pycalc.pycalc import _Token
+        from pycalc import _Token
         tokenized_expr = [_Token(index=0, type='MINUS', value='-'), _Token(index=1, type='INTEGER', value='1'),
                           _Token(index=2, type='MINUS', value='-'), _Token(index=3, type='INTEGER', value='2'),
                           _Token(index=4, type='TIMES', value='*'), _Token(index=5, type='LPARENT', value='('),
@@ -62,7 +62,7 @@ class PycalcUnitTestCase(unittest.TestCase):
     def test_postfix_queue(self):
         # tokenized_expr = pycalc._tokenize_expr("-1-2*(+3)**-4%(2*sin(pi/2))")
         # pycalc._unary_replace(tokenized_expr)
-        from pycalc.pycalc import _Token
+        from pycalc import _Token
         tokenized_expr = [_Token(index=0, type='UMINUS', value='-'), _Token(index=1, type='INTEGER', value='1'),
                           _Token(index=2, type='MINUS', value='-'), _Token(index=3, type='INTEGER', value='2'),
                           _Token(index=4, type='TIMES', value='*'), _Token(index=5, type='LPARENT', value='('),
@@ -87,7 +87,7 @@ class PycalcUnitTestCase(unittest.TestCase):
         # tokenized_expr = pycalc._tokenize_expr(expr)
         # pycalc._unary_replace(tokenized_expr)
         # postfix = pycalc._postfix_queue(tokenized_expr)
-        from pycalc.pycalc import _Token, deque
+        from pycalc import _Token, deque
         postfix = deque([_Token(index=0, type='INTEGER', value='1'), _Token(index=2, type='INTEGER', value='4'),
                          _Token(index=1, type='TIMES', value='*'), _Token(index=4, type='FLOAT', value='3.3'),
                          _Token(index=7, type='INTEGER', value='3'), _Token(index=9, type='FLOAT', value='.3'),
