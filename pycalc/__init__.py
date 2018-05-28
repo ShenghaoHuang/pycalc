@@ -5,16 +5,15 @@ Module for calculating mathematical expressions.
 This module provide calc() function for evaluation mathematical expression
 using customized shunting-yard and reverse polish notation algorithms.
 """
+# TODO: Docstrings
+# TODO: Split in submodules
+
 import argparse
 import operator
 import math
 import sys
 import re
 from collections import deque, namedtuple, OrderedDict
-
-
-def _error(error_msg):
-    raise ArithmeticError(error_msg)
 
 
 def _find_attr(attr_name):
@@ -32,7 +31,7 @@ def _find_attr(attr_name):
                 attr = getattr(attr, part, None)
             if attr is not None:
                 return attr
-    _error("Unknown function or constant:" + str(attr_name))
+    raise ArithmeticError("Unknown function or constant:" + str(attr_name))
 
 
 _tkn = namedtuple('_tkn', 're, operator, precedence')
@@ -99,7 +98,7 @@ def _import_modules():
         try:
             globals()[module] = __import__(module)
         except ImportError:
-            _error("Module not found:" + module)
+            raise ImportError("Module not found:" + module)
 
 
 def _tokenize_expr(expr):
@@ -114,7 +113,7 @@ def _tokenize_expr(expr):
                     expr = expr[t_match.end():]
                     break
         else:
-            _error("EXPRESSION Tokenize Error")
+            raise ArithmeticError("EXPRESSION Tokenize Error")
     return [_Token(i, t, v) for i, (t, v) in enumerate(token_expr)]
 
 
@@ -149,7 +148,7 @@ def _postfix_queue(token_expr):
             while stack[-1].type not in {'LPARENT', 'FUNC'}:
                 queue.append(stack.pop())
                 if not stack:
-                    _error("Parentheses error")
+                    raise ArithmeticError("Parentheses error")
             if stack[-1].type == 'FUNC':
                 queue.append(_Token('', 'ARGS', have_args.pop()))
                 queue.append(stack.pop())
@@ -198,21 +197,21 @@ def _rpn_calc(queue):
                     operand = rpn_stack.pop()
                     rpn_stack.append(element.operator(operand))
                 except IndexError:
-                    _error("Calculation error")
+                    raise ArithmeticError("Calculation error")
             else:
                 try:
                     operand_2, operand_1 = rpn_stack.pop(), rpn_stack.pop()
                     rpn_stack.append(element.operator(operand_1, operand_2))
                 except ZeroDivisionError:
-                    _error("Division by zero")
+                    raise ArithmeticError("Division by zero")
                 except IndexError:
-                    _error("Calculation error")
+                    raise ArithmeticError("Calculation error")
         result = rpn_stack.pop()
         if rpn_stack:
-            _error("Calculation error")
+            raise ArithmeticError("Calculation error")
         return result
     else:
-        _error("Empty EXPRESSION")
+        raise ArithmeticError("Empty EXPRESSION")
 
 
 def calc(expr: str, modules=(), verbose: bool = False):
@@ -247,9 +246,9 @@ def calc(expr: str, modules=(), verbose: bool = False):
 def _main():
     try:
         print(calc(*_parse_args()))
-    except ArithmeticError as error:
+    except (ArithmeticError, ImportError) as error:
         print("ERROR:", error, file=sys.stderr)
-        sys.exit(1)
+        raise SystemExit
 
 
 if __name__ == '__main__':

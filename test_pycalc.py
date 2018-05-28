@@ -11,13 +11,9 @@ class PycalcUnitTestCase(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_error(self):
-        with self.assertRaises(ArithmeticError):
-            pycalc._error("")
-
     def test_import_find(self):
         import math
-        with self.assertRaises(ArithmeticError):
+        with self.assertRaises(ImportError):
             pycalc._modules = ["unknown_module"]
             pycalc._import_modules()
         pycalc._modules = ["for_test", "math", "builtins"]
