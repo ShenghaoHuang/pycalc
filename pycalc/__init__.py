@@ -17,6 +17,16 @@ from collections import deque, namedtuple, OrderedDict
 
 
 def _find_attr(attr_name):
+    """
+    Find attribute in _modules.
+
+    If attribute don't have dot in it's name,
+    then function try to find attr on top level of _modules
+    If attribute have dot in it's name,
+    then function will try to get exact attribute.
+    :param attr_name: Name of searching attribute
+    :return: Object of attribute
+    """
     attr_name = attr_name.split('.')
     if len(attr_name) == 1:
         for module in _modules:
@@ -33,7 +43,7 @@ def _find_attr(attr_name):
                 return attr
     raise ArithmeticError("Unknown function or constant:" + str(attr_name))
 
-
+# Constant ordered dictionary with tokens: regexp, operator and precedence
 _tkn = namedtuple('_tkn', 're, operator, precedence')
 _TOKENS = OrderedDict([
     ('FLOAT', _tkn(re.compile(r'\d*\.\d+'), float, 9)),
@@ -65,6 +75,10 @@ _TOKENS = OrderedDict([
 
 
 class _Token(namedtuple('token', 'index, type, value')):
+    """
+    Named tuple for queue in reverse polish notation algorithm
+    with calculating properties from _TOKENS dictionary
+    """
     @property
     def precedence(self):
         return _TOKENS[self.type].precedence
@@ -75,25 +89,48 @@ class _Token(namedtuple('token', 'index, type, value')):
 
 
 def _parse_args():
-    parser = argparse.ArgumentParser("pycalc", description='Pure-python command-line calculator',
-                                     usage='%(prog)s EXPRESSION [-h] [-v] [-m [MODULE [MODULE ...]]]')
-    parser.add_argument('-m', '--use-modules', default='',
-                        help='additional modules to use', nargs='*', metavar='MODULE')
+    """
+    Function that parse arguments using argparse package.
+    :return: tuple(EXPRESSION,MODULE*,verbose)
+    """
+    parser = argparse.ArgumentParser(
+        'pycalc',
+        description='Pure-python command-line calculator',
+        usage='%(prog)s EXPRESSION [-h] [-v] [-m [MODULE [MODULE ...]]]')
+    parser.add_argument(
+        '-m', '--use-modules', default='',
+        help='additional modules to use', nargs='*',
+        metavar='MODULE')
     parser.add_argument('EXPRESSION', help='expression string to evaluate')
-    parser.add_argument('-v', '--verbose', action='store_true', help='print verbose information')
+    parser.add_argument('-v', '--verbose', action='store_true',
+                        help='print verbose information')
     args = parser.parse_args()
     return str(args.EXPRESSION), args.use_modules, args.verbose
 
 
 def _modify_expr(expr):
-    expr = re.sub(r'[^\w +\-*/^%><=,.!()]', '', expr)  # filter unsupported characters
-    expr = re.sub(r'([ +\-*/^%><=,(][\d]+)\(', r'\g<1>*(', expr)  # ...2(...) changes to ...2*(...)
-    expr = re.sub(r'(^[\d]+)\(', r'\g<1>*(', expr)  # 2(...) changes to 2*(...)
-    expr = re.sub(r',\s*\)', r')', expr)  # (a,b, ) to (a,b)
+    """
+    Filter unsupported characters from expr,
+    modify expr for correct work of RPN algorithm in special cases.
+    :param expr: expression
+    :return: filtered expr
+    """
+    # filter unsupported characters
+    expr = re.sub(r'[^\w +\-*/^%><=,.!()]', '', expr)
+    # ...2(...) changes to ...2*(...)
+    expr = re.sub(r'([ +\-*/^%><=,(][\d]+)\(', r'\g<1>*(', expr)
+    # 2(...) changes to 2*(...)
+    expr = re.sub(r'(^[\d]+)\(', r'\g<1>*(', expr)
+    # (a,b, ) to (a,b)
+    expr = re.sub(r',\s*\)', r')', expr)
     return expr
 
 
 def _import_modules():
+    """
+    Import _modules in global namespace
+    :return:
+    """
     for module in _modules:
         try:
             globals()[module] = __import__(module)
@@ -102,6 +139,12 @@ def _import_modules():
 
 
 def _tokenize_expr(expr):
+    """
+    Walk through regexps in _TOKENS dict and cut expression in tokens
+    :param expr:
+    :type expr:str
+    :return: list of _Token namedtuples(index, type, value)
+    """
     token_expr = deque()
     while expr:
         for (_type, (_re, _, _)) in _TOKENS.items():
@@ -118,14 +161,30 @@ def _tokenize_expr(expr):
 
 
 def _unary_replace(token_expr):
+    """
+    Search to MINUS or PLUS and change them to UMINUS or UPLUS
+    according to previous token.
+    """
     for token in token_expr:
         not_unary_after = {'FLOAT', 'INTEGER', 'CONST', 'COMPLEX', 'RPARENT'}
         if (token.type in {'MINUS', 'PLUS'} and
-                (token.index == 0 or token_expr[token.index - 1].type not in not_unary_after)):
+                (token.index == 0 or
+                 token_expr[token.index - 1].type not in not_unary_after)):
+            # Place U before token.type
             token_expr[token.index] = _Token(token.index, 'U' + token.type, token.value)
 
 
 def _postfix_queue(token_expr):
+    """
+    Form postfix queue from tokenized expression using shunting-yard algorithm.
+
+    If expression have function, then presence of arguments for that function
+    added before function token.
+    If function have few arguments then RPN algorithm will pop them from stack
+    until comma will be top token on stack
+
+    :return: queue of tokens ready for reverse polish calculation
+    """
     stack = deque()
     queue = deque()
     have_args = deque()
@@ -177,6 +236,11 @@ def _postfix_queue(token_expr):
 
 
 def _rpn_calc(queue):
+    """
+    Calculate expression using postfix evaluation algorithm.
+    :param queue:
+    :return:
+    """
     rpn_stack = deque()
     if queue:
         for element in queue:
@@ -185,7 +249,6 @@ def _rpn_calc(queue):
             elif element.type == 'FUNC':
                 func_args = deque()
                 if rpn_stack.pop() is True:
-                    # function have arguments and we will continue to pop them until comma left on stack
                     func_args.append(rpn_stack.pop())
                 while rpn_stack and rpn_stack[-1] == ',':
                     rpn_stack.pop()
