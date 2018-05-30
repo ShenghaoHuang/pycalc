@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import unittest
-import pycalc
+
+from pycalc.rpn import *
 import re
 
 
