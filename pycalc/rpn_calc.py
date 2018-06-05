@@ -111,8 +111,11 @@ def _postfix_queue(token_expr):
             queue.append(token)
         elif token.type == 'FUNC':
             stack.append(token)
-            # If function have no arguments "func()" we append False before FUNC
-            have_args.append(False if token_expr[token.index + 1].type == 'RPARENT' else True)
+            # If function have no arguments we append False before FUNC
+            if token_expr[token.index + 1].type == 'RPARENT':
+                have_args.append(False)
+            else:
+                have_args.append(True)
         elif not stack:
             stack.append(token)
         elif token.type == 'COMMA':
@@ -132,10 +135,12 @@ def _postfix_queue(token_expr):
             else:
                 stack.pop()
         elif token.type in {'UMINUS', 'UPLUS'} and stack[-1].type == 'POWER':
-            # From Python docs: The power operator binds more tightly than unary operators on its left;
+            # From Python docs: The power operator binds more tightly
+            # than unary operators on its left;
             # it binds less tightly than unary operators on its right.
             stack.append(token)
-        elif token.precedence == stack[-1].precedence and token.type in {'POWER', 'UMINUS', 'UPLUS'}:
+        elif token.precedence == stack[-1].precedence and \
+                token.type in {'POWER', 'UMINUS', 'UPLUS'}:
             # Right-to-Left association operations
             stack.append(token)
         elif token.precedence <= stack[-1].precedence:
@@ -166,14 +171,14 @@ def _rpn_calc(queue):
                                 'CONST', 'COMMA', 'ARGS'):
                 rpn_stack.append(element.operator(element.value))
             elif element.type == 'FUNC':
-                func_args = deque()
+                fargs = deque()
                 if rpn_stack.pop() is True:
-                    func_args.append(rpn_stack.pop())
+                    fargs.append(rpn_stack.pop())
                 while rpn_stack and rpn_stack[-1] == ',':
                     rpn_stack.pop()
-                    func_args.append(rpn_stack.pop())
-                func_args.reverse()
-                rpn_stack.append(element.operator(element.value[:-1])(*func_args))
+                    fargs.append(rpn_stack.pop())
+                fargs.reverse()
+                rpn_stack.append(element.operator(element.value[:-1])(*fargs))
             elif element.type in {'UMINUS', 'UPLUS'}:
                 try:
                     operand = rpn_stack.pop()
