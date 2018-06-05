@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+"""
+Unit and integration tests for package pycalc
+"""
 import unittest
 import re
 

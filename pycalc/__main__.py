@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Main module for handling execution of module like $python3 -m pycalc "1+1"
 """
