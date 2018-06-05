@@ -1,37 +1,13 @@
 """
-
+This module provide calc() function for evaluation mathematical expression
+using customized shunting-yard and reverse polish notation algorithms.
 """
 import operator
 import re
-from collections import namedtuple, OrderedDict
 
+from collections import namedtuple, OrderedDict, deque
 
-def _find_attr(attr_name):
-    """
-    Find attribute in _modules.
-
-    If attribute don't have dot in it's name,
-    then function try to find attr on top level of _modules
-    If attribute have dot in it's name,
-    then function will try to get exact attribute.
-    :param attr_name: Name of searching attribute
-    :return: Object of attribute
-    """
-    attr_name = attr_name.split('.')
-    if len(attr_name) == 1:
-        for module in _modules:
-            attr = getattr(sys.modules[module], attr_name[0], None)
-            if attr is None:
-                continue
-            return attr
-    else:
-        if attr_name[0] in _modules:
-            attr = getattr(sys.modules[__name__], attr_name[0], None)
-            for part in attr_name[1:]:
-                attr = getattr(attr, part, None)
-            if attr is not None:
-                return attr
-    raise ArithmeticError("Unknown function or constant:" + str(attr_name))
+from pycalc.ext_modules import find_attr, import_modules
 
 
 # Constant ordered dictionary with tokens: regexp, operator and precedence
@@ -57,8 +33,8 @@ _TOKENS = OrderedDict([
     ('GT', _tkn(re.compile(r'>'), operator.gt, 3)),
     ('NE', _tkn(re.compile(r'!='), operator.ne, 2)),
     ('SPACE', _tkn(re.compile(r'\s+'), None, None)),
-    ('FUNC', _tkn(re.compile(r'[\w]+\('), _find_attr, 1)),
-    ('CONST', _tkn(re.compile(r'[\w]+'), _find_attr, 9)),
+    ('FUNC', _tkn(re.compile(r'[\w]+\('), find_attr, 1)),
+    ('CONST', _tkn(re.compile(r'[\w]+'), find_attr, 9)),
     ('ARGS', _tkn(None, bool, 1)),
     ('UMINUS', _tkn(None, lambda x: x * -1, 6)),
     ('UPLUS', _tkn(None, lambda x: x, 6)),
@@ -186,7 +162,8 @@ def _rpn_calc(queue):
     rpn_stack = deque()
     if queue:
         for element in queue:
-            if element.type in ('FLOAT', 'INTEGER', 'COMPLEX', 'CONST', 'COMMA', 'ARGS'):
+            if element.type in ('FLOAT', 'INTEGER', 'COMPLEX',
+                                'CONST', 'COMMA', 'ARGS'):
                 rpn_stack.append(element.operator(element.value))
             elif element.type == 'FUNC':
                 func_args = deque()
@@ -217,3 +194,52 @@ def _rpn_calc(queue):
         return result
     else:
         raise ArithmeticError("Empty EXPRESSION")
+
+
+def _modify_expr(expr):
+    """
+    Filter unsupported characters from expr,
+    modify expr for correct work of RPN algorithm in special cases.
+    :param expr: expression
+    :return: filtered expr
+    """
+    # filter unsupported characters
+    expr = re.sub(r'[^\w +\-*/^%><=,.!()]', '', expr)
+    # ...2(...) changes to ...2*(...)
+    expr = re.sub(r'([ +\-*/^%><=,(][\d]+)\(', r'\g<1>*(', expr)
+    # 2(...) changes to 2*(...)
+    expr = re.sub(r'(^[\d]+)\(', r'\g<1>*(', expr)
+    # (a,b, ) to (a,b)
+    expr = re.sub(r',\s*\)', r')', expr)
+    return expr
+
+
+def calc(expr: str, modules=(), verbose: bool = False):
+    """
+    Calculate expression like python, with builtins and
+    math module functions and constants. Support import of
+    third-party functions and constants from modules
+
+    :param expr: EXPRESSION for calculation
+    :type expr: str
+    :param modules: Additional modules
+    :type modules: list[str]
+    :param verbose: Print verbose information
+    :type verbose: bool
+    :return: Result of calculation
+    """
+    # vprint will print out verbose information
+    # if verbose=True, otherwise just return None
+    vprint = print if verbose else lambda *args, **kwargs: None
+    global _modules
+    _modules = [*modules, 'math', 'builtins']
+    expr = _modify_expr(expr)
+    vprint("EXPR:\t", expr)
+    import_modules(_modules)
+    _token_expr = _tokenize_expr(expr)
+    _unary_replace(_token_expr)
+    vprint('TOKENS:\t', '  '.join(str(v) + ':' + t for i, t, v in _token_expr))
+    _queue = _postfix_queue(_token_expr)
+    vprint('RPN:\t', '  '.join(str(v) + ':' + t for i, t, v in _queue))
+    _result = _rpn_calc(_queue)
+    return _result
