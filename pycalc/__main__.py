@@ -30,9 +30,15 @@ def _parse_args():
 
 def _main():
     try:
+        if len(sys.argv) == 1:
+            while True:
+                expr = input(">>")
+                print(calc(expr))
         print(calc(*_parse_args()))
     except (ArithmeticError, ImportError) as error:
         print("ERROR:", error, file=sys.stderr)
+        raise SystemExit
+    except (EOFError, KeyboardInterrupt):
         raise SystemExit
 
 
